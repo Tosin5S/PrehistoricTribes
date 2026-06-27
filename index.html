@@ -1,0 +1,277 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Prehistoric Tribes - Strategy & Simulation</title>
+  <!-- SEO & Description -->
+  <meta name="description" content="Lead your prehistoric tribe, manage resources, build structures, and defend against cannibal raids in this real-time strategy simulation.">
+  <!-- Google Fonts -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Cinzel:wght@500;700;900&family=Outfit:wght@300;400;600;700&display=swap" rel="stylesheet">
+  <!-- Stylesheet -->
+  <link rel="stylesheet" href="/src/style.css">
+</head>
+<body>
+  <!-- Ambient Audio Indicator & Controls -->
+  <div class="top-controls">
+    <div class="brand">
+      <span class="brand-sub">PREHISTORIC</span>
+      <span class="brand-main">TRIBES</span>
+    </div>
+    <div class="audio-controls">
+      <button id="sound-effects-btn" class="control-btn" title="Toggle Sound Effects">
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="18" height="18" fill="currentColor">
+          <path d="M12 3v18l-6-6H2V9h4l6-6zm3.5 9c0-1.77-1.02-3.29-2.5-4.03v8.05c1.48-.73 2.5-2.25 2.5-4.02zM13 4.07v2.06c2.89.86 5 3.54 5 6.74s-2.11 5.88-5 6.74v2.06c4.01-.91 7-4.52 7-8.8s-2.99-7.89-7-8.8z"/>
+        </svg>
+        <span>SFX: ON</span>
+      </button>
+      <button id="music-btn" class="control-btn" title="Toggle Tribal Music">
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="18" height="18" fill="currentColor">
+          <path d="M12 3v10.55c-.59-.34-1.27-.55-2-.55-2.21 0-4 1.79-4 4s1.79 4 4 4 4-1.79 4-4V7h4V3h-6z"/>
+        </svg>
+        <span>MUSIC: OFF</span>
+      </button>
+    </div>
+  </div>
+
+  <div id="game-container">
+    <!-- Resource and Status Bar -->
+    <header id="status-bar">
+      <div class="status-item" id="food-display" title="Cooked Food / Raw Food (Villagers eat Cooked Food)">
+        <span class="icon">🍖</span>
+        <div class="stat-values">
+          <span class="label">Food</span>
+          <span class="value"><span id="cooked-food-val">20</span> <span class="sub-val">/<span id="raw-food-val">10</span></span></span>
+        </div>
+      </div>
+      <div class="status-item" id="wood-display" title="Wood (Used for building and crafting)">
+        <span class="icon">🪵</span>
+        <div class="stat-values">
+          <span class="label">Wood</span>
+          <span class="value" id="wood-val">50</span>
+        </div>
+      </div>
+      <div class="status-item" id="stone-display" title="Stone (Used for buildings)">
+        <span class="icon">🪨</span>
+        <div class="stat-values">
+          <span class="label">Stone</span>
+          <span class="value" id="stone-val">0</span>
+        </div>
+      </div>
+      <div class="status-item" id="weapons-display" title="Weapons (Equips warriors & hunters)">
+        <span class="icon">🪓</span>
+        <div class="stat-values">
+          <span class="label">Weapons</span>
+          <span class="value" id="weapons-val">0</span>
+        </div>
+      </div>
+      <div class="status-item" id="pop-display" title="Tribe Population (Build Huts to increase capacity)">
+        <span class="icon">👥</span>
+        <div class="stat-values">
+          <span class="label">Tribe</span>
+          <span class="value"><span id="pop-val">4</span><span class="sub-val">/<span id="max-pop-val">6</span></span></span>
+        </div>
+      </div>
+      <div class="status-divider"></div>
+      <div class="status-item" id="season-display" title="Current Season & Weather">
+        <span class="icon" id="weather-icon">☀️</span>
+        <div class="stat-values">
+          <span class="label" id="season-val">Spring</span>
+          <span class="value" id="weather-val">Sunny</span>
+        </div>
+      </div>
+      <div class="status-item" id="danger-display" title="Danger Meter: Spawns cannibal raids when filled!">
+        <span class="icon">🔥</span>
+        <div class="stat-values">
+          <span class="label">Danger</span>
+          <div class="danger-bar-container">
+            <div id="danger-bar-fill" style="width: 0%;"></div>
+          </div>
+        </div>
+      </div>
+    </header>
+
+    <!-- Main Game Window -->
+    <main id="game-main">
+      <div id="canvas-wrapper">
+        <canvas id="game-canvas"></canvas>
+        <div id="weather-overlay"></div>
+      </div>
+
+      <!-- Left Sidebar: Villager Management -->
+      <aside id="villagers-panel" class="glass-panel">
+        <div class="panel-header">
+          <h3>Tribe Members</h3>
+          <span class="badge" id="panel-pop-badge">4</span>
+        </div>
+        <div class="panel-content scrollable" id="villagers-list">
+          <!-- Populated dynamically via JS -->
+        </div>
+      </aside>
+
+      <!-- Right Sidebar: Construction & Quick Jobs -->
+      <aside id="controls-panel" class="glass-panel">
+        <!-- Section: Build Menu -->
+        <section class="control-section">
+          <div class="section-header">
+            <h3>Construct Village</h3>
+          </div>
+          <div class="build-grid">
+            <button class="build-btn" data-building="hut" title="Hut: Cost 50 Wood. Increases population cap by 3. Resting/sleeping spot. Allows breeding.">
+              <span class="build-icon">🛖</span>
+              <span class="build-name">Hut</span>
+              <span class="build-cost">🪵50</span>
+            </button>
+            <button class="build-btn" data-building="storage" title="Storage: Cost 80 Wood, 30 Stone. Increases storage cap of all resources by +250.">
+              <span class="build-icon">📦</span>
+              <span class="build-name">Storage</span>
+              <span class="build-cost">🪵80 🪨30</span>
+            </button>
+            <button class="build-btn" data-building="kitchen" title="Kitchen: Cost 60 Wood, 40 Stone. Allows Cooks to turn Raw Food into Cooked Food faster.">
+              <span class="build-icon">🔥</span>
+              <span class="build-name">Kitchen</span>
+              <span class="build-cost">🪵60 🪨40</span>
+            </button>
+            <button class="build-btn" data-building="armoury" title="Armoury: Cost 100 Wood, 70 Stone. Unlocks Weapon Crafting. Automatically crafts weapons from Wood & Stone.">
+              <span class="build-icon">🔨</span>
+              <span class="build-name">Armoury</span>
+              <span class="build-cost">🪵100 🪨70</span>
+            </button>
+            <button class="build-btn" data-building="gym" title="Gym: Cost 90 Wood, 90 Stone. Lets Warriors train, raising their Combat Damage by +5 per session.">
+              <span class="build-icon">💪</span>
+              <span class="build-name">Gym</span>
+              <span class="build-cost">🪵90 🪨90</span>
+            </button>
+            <button class="build-btn" data-building="shaman" title="Shaman's Tent: Cost 120 Wood, 80 Stone. Enables the Shaman job to heal sick villagers.">
+              <span class="build-icon">🧪</span>
+              <span class="build-name">Shaman</span>
+              <span class="build-cost">🪵120 🪨80</span>
+            </button>
+            <button class="build-btn" data-building="tower" title="Watchtower: Cost 70 Wood, 50 Stone. Shoots arrows at nearby cannibals and hostile beasts.">
+              <span class="build-icon">🏹</span>
+              <span class="build-name">Tower</span>
+              <span class="build-cost">🪵70 🪨50</span>
+            </button>
+          </div>
+        </section>
+
+        <!-- Section: Global Job Manager -->
+        <section class="control-section">
+          <div class="section-header">
+            <h3>Job Allocation</h3>
+          </div>
+          <div class="job-manager" id="global-jobs">
+            <!-- Rendered dynamically, e.g.: -->
+            <!-- Job Rows with + and - buttons -->
+          </div>
+        </section>
+      </aside>
+    </main>
+
+    <!-- Bottom Ticker / Event Log -->
+    <footer id="event-logger">
+      <div class="log-title">Village Chronicles</div>
+      <div class="log-messages" id="log-console">
+        <div class="log-msg system">Welcome, Chief! Guide your tribe to safety and prosperity. Assign jobs and gather wood to build Huts.</div>
+      </div>
+    </footer>
+  </div>
+
+  <!-- Detailed Villager Profile Modal -->
+  <div id="villager-modal" class="modal">
+    <div class="modal-content glass-panel">
+      <span class="close-btn" id="modal-close">&times;</span>
+      <div class="profile-header">
+        <div class="profile-avatar" id="modal-avatar">👦</div>
+        <div class="profile-title">
+          <h2 id="modal-name">Ugg</h2>
+          <p id="modal-gender-age">Male, Age 24</p>
+        </div>
+      </div>
+      <hr>
+      <div class="profile-stats">
+        <div class="stat-row">
+          <span class="stat-label">Health</span>
+          <div class="stat-bar-container"><div id="modal-health-fill" class="stat-bar health" style="width: 100%;"></div></div>
+          <span class="stat-val" id="modal-health-val">100/100</span>
+        </div>
+        <div class="stat-row">
+          <span class="stat-label">Energy</span>
+          <div class="stat-bar-container"><div id="modal-energy-fill" class="stat-bar energy" style="width: 100%;"></div></div>
+          <span class="stat-val" id="modal-energy-val">100/100</span>
+        </div>
+        <div class="stat-row">
+          <span class="stat-label">Hunger</span>
+          <div class="stat-bar-container"><div id="modal-hunger-fill" class="stat-bar hunger" style="width: 0%;"></div></div>
+          <span class="stat-val" id="modal-hunger-val">0% (Sated)</span>
+        </div>
+        <div class="stat-row">
+          <span class="stat-label">Mood</span>
+          <div class="stat-bar-container"><div id="modal-mood-fill" class="stat-bar mood" style="width: 80%;"></div></div>
+          <span class="stat-val" id="modal-mood-val">Happy</span>
+        </div>
+        <div class="stat-row">
+          <span class="stat-label">Strength</span>
+          <span class="stat-val bold" id="modal-combat-val">10 (Club)</span>
+        </div>
+      </div>
+      <div class="profile-action">
+        <label for="modal-job-select">Assign Occupation:</label>
+        <select id="modal-job-select">
+          <option value="idle">Idle (Socializing & Resting)</option>
+          <option value="woodcutter">Woodcutter (Chops Trees)</option>
+          <option value="miner">Stone Miner (Mines Rocks)</option>
+          <option value="gatherer">Hunter/Gatherer (Forages Food)</option>
+          <option value="cook">Cook (Makes Hot Meals)</option>
+          <option value="builder">Builder (Erects Buildings)</option>
+          <option value="warrior">Warrior (Defends the Village)</option>
+          <option value="shaman">Shaman (Heals the Sick)</option>
+        </select>
+      </div>
+    </div>
+  </div>
+
+  <!-- Game Intro & Instructions Dialog -->
+  <div id="intro-dialog" class="modal show">
+    <div class="modal-content intro-content glass-panel">
+      <div class="intro-logo">🪵 🪓 🛖 🪨</div>
+      <h2>PREHISTORIC TRIBES</h2>
+      <p>Chief! You must guide a small band of prehistoric humans in a harsh world. Keep them alive, gather resources, grow your population, build structures, and protect them from winter frost and cannibal raids!</p>
+      
+      <div class="guide-box">
+        <h4>Survival Rules:</h4>
+        <ul>
+          <li><strong>Food Management:</strong> Hunters gather <em>Raw Food</em>. Cooks turn it into <em>Cooked Food</em>. If cooked food runs dry, villagers starve and health plummets.</li>
+          <li><strong>Resting:</strong> Villagers lose energy working. They automatically sleep in <strong>Huts</strong> (or on the cold ground if huts are full, which risks disease).</li>
+          <li><strong>Breeding:</strong> When villagers are happy, well-fed, and there are free beds in Huts, idle villagers will mate and spawn babies.</li>
+          <li><strong>Danger & Raids:</strong> Chopping trees, mining, and expanding increases the danger level. When full, <strong>cannibals</strong> will raid the village. Train <strong>Warriors</strong> and build <strong>Watchtowers</strong> to survive!</li>
+          <li><strong>Seasons:</strong> In Winter, raw food is hard to find, and cold drains health. Stockpile cooked food and wood beforehand!</li>
+        </ul>
+      </div>
+
+      <button id="start-game-btn" class="start-btn">BECOME THE CHIEF</button>
+    </div>
+  </div>
+
+  <!-- Game Over Screen -->
+  <div id="gameover-dialog" class="modal">
+    <div class="modal-content gameover-content glass-panel">
+      <div class="gameover-logo">💀</div>
+      <h2>TRIBE EXTINCT</h2>
+      <p id="gameover-reason">All your villagers have perished. The harsh prehistoric age has reclaimed your settlement.</p>
+      <div class="stats-summary">
+        <div>Days Survived: <span id="summary-days" class="highlight">0</span></div>
+        <div>Max Population: <span id="summary-pop" class="highlight">0</span></div>
+        <div>Wood Gathered: <span id="summary-wood" class="highlight">0</span></div>
+        <div>Stone Gathered: <span id="summary-stone" class="highlight">0</span></div>
+      </div>
+      <button id="restart-game-btn" class="start-btn">TRY AGAIN</button>
+    </div>
+  </div>
+
+  <!-- Javascript Modules -->
+  <script type="module" src="/src/main.js"></script>
+</body>
+</html>
