@@ -735,6 +735,435 @@ export class GameEngine {
     });
   }
 
+  drawVectorHuman(entity, isEnemy = false) {
+    const ctx = this.ctx;
+    ctx.save();
+
+    // Scale child down
+    if (entity.isChild) {
+      ctx.scale(0.65, 0.65);
+    }
+
+    // Handle sleeping (rotate body)
+    const isSleeping = entity.state === 'sleeping';
+    if (isSleeping) {
+      ctx.rotate(Math.PI / 2);
+      ctx.translate(5, -5);
+    }
+
+    const facing = entity.facing || 'down';
+    const animFrame = entity.animFrame || 0;
+    const isMoving = entity.state === 'moving';
+    
+    // Set colors
+    // Skin Tone
+    let skinColor = isEnemy ? '#8a6448' : '#e8be96';
+    if (entity.isSick) skinColor = '#b8c7b4'; // pale sick green
+    
+    // Hair Color
+    let hairColor = '#2c1e14'; // dark brown
+    if (!isEnemy && entity.gender === 'Female') hairColor = '#4e342e'; // red-brown
+    if (isEnemy) hairColor = '#000000'; // black hair
+    
+    // Clothes Color
+    let clothColor = '#5c4033'; // brown loincloth
+    if (!isEnemy) {
+      if (entity.job === 'warrior') clothColor = '#800000'; // red tunic
+      else if (entity.job === 'shaman') clothColor = '#4b0082'; // indigo robe
+      else if (entity.job === 'cook') clothColor = '#bd5d38'; // orange tunic
+      else if (entity.gender === 'Female') clothColor = '#2e5a44'; // green tunic
+    } else {
+      clothColor = '#3a322c'; // dark grey loincloth
+    }
+
+    // 1. Draw Legs (Left & Right)
+    const legSwing = isMoving ? Math.sin(animFrame) * 8 : 0;
+    
+    ctx.lineWidth = 3.5;
+    ctx.strokeStyle = skinColor;
+    ctx.lineCap = 'round';
+    
+    // Left Leg
+    ctx.beginPath();
+    ctx.moveTo(-3, 6);
+    if (isSleeping) {
+      ctx.lineTo(-6, 12);
+      ctx.lineTo(-3, 16);
+    } else {
+      ctx.lineTo(-3 - legSwing, 18);
+    }
+    ctx.stroke();
+
+    // Right Leg
+    ctx.beginPath();
+    ctx.moveTo(3, 6);
+    if (isSleeping) {
+      ctx.lineTo(0, 12);
+      ctx.lineTo(3, 16);
+    } else {
+      ctx.lineTo(3 + legSwing, 18);
+    }
+    ctx.stroke();
+
+    // 2. Draw Torso (Tunic/Loincloth)
+    ctx.fillStyle = clothColor;
+    ctx.beginPath();
+    ctx.roundRect(-6, -6, 12, 12, 3);
+    ctx.fill();
+
+    // Belt
+    if (!isSleeping) {
+      ctx.strokeStyle = '#1c1511';
+      ctx.lineWidth = 1.5;
+      ctx.beginPath();
+      ctx.moveTo(-6, 3);
+      ctx.lineTo(6, 3);
+      ctx.stroke();
+    }
+
+    // Cannibal war paint
+    if (isEnemy) {
+      ctx.strokeStyle = '#d62828';
+      ctx.lineWidth = 1.8;
+      ctx.beginPath();
+      ctx.moveTo(-4, -2); ctx.lineTo(4, 2);
+      ctx.moveTo(4, -2); ctx.lineTo(-4, 2);
+      ctx.stroke();
+    }
+
+    // 3. Draw Head
+    ctx.fillStyle = skinColor;
+    ctx.beginPath();
+    ctx.arc(0, -12, 6, 0, Math.PI * 2);
+    ctx.fill();
+
+    // Beard for non-child males
+    if (!entity.isChild && entity.gender === 'Male' && !isEnemy) {
+      ctx.fillStyle = hairColor;
+      ctx.beginPath();
+      ctx.arc(0, -9, 4, 0, Math.PI);
+      ctx.fill();
+    }
+
+    // Hair
+    ctx.fillStyle = hairColor;
+    ctx.beginPath();
+    if (entity.gender === 'Female' && !entity.isChild) {
+      // Long hair flowing down
+      ctx.arc(0, -14, 7, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.fillRect(-7, -14, 3, 12);
+      ctx.fillRect(4, -14, 3, 12);
+    } else {
+      // Short hair
+      ctx.arc(0, -14, 6.5, Math.PI, 0);
+      ctx.fill();
+      ctx.fillRect(-5, -16, 2, 2);
+      ctx.fillRect(0, -17, 2, 3);
+      ctx.fillRect(3, -16, 2, 2);
+    }
+
+    // Bone in hair for cannibals
+    if (isEnemy) {
+      ctx.fillStyle = '#ffffff';
+      ctx.save();
+      ctx.translate(0, -18);
+      ctx.rotate(0.3);
+      ctx.fillRect(-6, -1.5, 12, 3);
+      ctx.beginPath();
+      ctx.arc(-6, -1.5, 2, 0, Math.PI*2);
+      ctx.arc(-6, 1.5, 2, 0, Math.PI*2);
+      ctx.arc(6, -1.5, 2, 0, Math.PI*2);
+      ctx.arc(6, 1.5, 2, 0, Math.PI*2);
+      ctx.fill();
+      ctx.restore();
+    }
+
+    // Eyes
+    ctx.fillStyle = '#000000';
+    if (facing === 'down') {
+      ctx.fillRect(-2.5, -13, 1.2, 1.2);
+      ctx.fillRect(1.5, -13, 1.2, 1.2);
+    } else if (facing === 'left') {
+      ctx.fillRect(-4, -13, 1.2, 1.2);
+    } else if (facing === 'right') {
+      ctx.fillRect(2.8, -13, 1.2, 1.2);
+    }
+
+    // 4. Draw Arms & Handheld Objects
+    const isGathering = entity.state === 'gathering';
+    const isCooking = entity.state === 'cooking';
+    const isBuilding = entity.state === 'building';
+    const isFighting = entity.state === 'fighting' || (isEnemy && entity.target);
+
+    // Left Arm
+    ctx.lineWidth = 3;
+    ctx.strokeStyle = skinColor;
+    ctx.beginPath();
+    ctx.moveTo(-6, -4);
+    if (isSleeping) {
+      ctx.lineTo(-1, 0);
+    } else if (entity.inventory.amount > 0) {
+      ctx.lineTo(-2, 2);
+    } else {
+      ctx.lineTo(-9, 2);
+    }
+    ctx.stroke();
+
+    // Right Arm (Dynamic Tool action hand)
+    ctx.save();
+    ctx.beginPath();
+    ctx.moveTo(6, -4);
+
+    const actionAngle = Math.sin(animFrame * 8) * 0.4;
+    
+    if (isSleeping) {
+      ctx.lineTo(1, 0);
+      ctx.stroke();
+    } else if (entity.inventory.amount > 0) {
+      // Holding cargo
+      ctx.lineTo(2, 2);
+      ctx.stroke();
+
+      // Draw Cargo visually
+      ctx.save();
+      ctx.translate(0, 2);
+      if (entity.inventory.type === 'wood') {
+        ctx.fillStyle = '#8b5a2b';
+        ctx.fillRect(-4, -1.5, 8, 3);
+      } else if (entity.inventory.type === 'stone') {
+        ctx.fillStyle = '#666';
+        ctx.beginPath(); ctx.arc(0, 0, 3.5, 0, Math.PI*2); ctx.fill();
+      } else if (entity.inventory.type === 'rawFood') {
+        ctx.fillStyle = '#d62828';
+        ctx.beginPath(); ctx.arc(0, 0, 3, 0, Math.PI*2); ctx.fill();
+      }
+      ctx.restore();
+    } else if (isGathering || isBuilding || isCooking || isFighting) {
+      // Swing arm
+      ctx.translate(6, -4);
+      ctx.rotate(actionAngle + Math.PI/6);
+      ctx.lineTo(0, 8);
+      ctx.stroke();
+
+      // Tool draw
+      ctx.save();
+      ctx.translate(0, 8);
+      ctx.rotate(-Math.PI/4);
+      ctx.lineWidth = 1.8;
+      ctx.strokeStyle = '#5c4033'; // wooden haft
+
+      if (entity.job === 'woodcutter') {
+        ctx.beginPath(); ctx.moveTo(0, 2); ctx.lineTo(0, -9); ctx.stroke();
+        ctx.fillStyle = '#888'; ctx.fillRect(-3, -9, 4, 2.5); // axe head
+      } else if (entity.job === 'miner') {
+        ctx.beginPath(); ctx.moveTo(0, 2); ctx.lineTo(0, -9); ctx.stroke();
+        ctx.fillStyle = '#888';
+        ctx.beginPath(); ctx.arc(0, -9, 3.5, Math.PI, 0); ctx.fill(); // pick pick
+      } else if (entity.job === 'builder') {
+        ctx.beginPath(); ctx.moveTo(0, 2); ctx.lineTo(0, -8); ctx.stroke();
+        ctx.fillStyle = '#444'; ctx.fillRect(-2.5, -10, 5, 2.5); // hammer head
+      } else if (entity.job === 'warrior' || isEnemy) {
+        if (entity.weapon === 'axe') {
+          ctx.beginPath(); ctx.moveTo(0, 3); ctx.lineTo(0, -10); ctx.stroke();
+          ctx.fillStyle = '#aaa'; ctx.fillRect(-3.5, -10, 4.5, 3.5);
+        } else if (entity.weapon === 'spear') {
+          ctx.beginPath(); ctx.moveTo(0, 5); ctx.lineTo(0, -16); ctx.stroke();
+          ctx.fillStyle = '#ddd';
+          ctx.beginPath(); ctx.moveTo(0, -19); ctx.lineTo(-2.5, -16); ctx.lineTo(2.5, -16); ctx.closePath(); ctx.fill();
+        } else if (isEnemy) {
+          // Raider spiked Club
+          ctx.beginPath(); ctx.moveTo(0, 3); ctx.lineTo(0, -8); ctx.lineWidth = 3.2; ctx.stroke();
+          ctx.fillStyle = '#eee';
+          ctx.fillRect(-2.5, -8, 1, 1);
+          ctx.fillRect(2.5, -6, 1, 1);
+        }
+      }
+      ctx.restore();
+    } else {
+      // Default hang arm
+      ctx.lineTo(9, 2);
+      ctx.stroke();
+
+      // Show weapons on hip/back when idle
+      if (entity.weapon && entity.weapon !== 'none') {
+        ctx.save();
+        ctx.translate(9, 2);
+        ctx.rotate(0.2);
+        ctx.lineWidth = 1.5;
+        ctx.strokeStyle = '#5c4033';
+        if (entity.weapon === 'axe') {
+          ctx.beginPath(); ctx.moveTo(0, 3); ctx.lineTo(0, -6); ctx.stroke();
+          ctx.fillStyle = '#888'; ctx.fillRect(-2.5, -6, 3, 2);
+        } else if (entity.weapon === 'spear') {
+          ctx.beginPath(); ctx.moveTo(0, 5); ctx.lineTo(0, -11); ctx.stroke();
+          ctx.fillStyle = '#ddd'; ctx.beginPath(); ctx.moveTo(0, -13); ctx.lineTo(-2, -11); ctx.lineTo(2, -11); ctx.closePath(); ctx.fill();
+        }
+        ctx.restore();
+      }
+    }
+    ctx.restore();
+
+    ctx.restore();
+  }
+
+  drawVectorAnimal(a) {
+    const ctx = this.ctx;
+    const scale = a.type === 'mammoth' ? 1.45 : (a.type === 'boar' ? 1.0 : 0.65);
+    
+    ctx.save();
+    
+    // Jump animation for rabbits (hopping)
+    if (a.type === 'rabbit') {
+      const hop = Math.abs(Math.sin(a.animFrame * 2.5)) * -7;
+      ctx.translate(0, hop);
+    }
+
+    ctx.scale(scale, scale);
+
+    if (a.facing === 'left') {
+      ctx.scale(-1, 1);
+    }
+
+    const walkSwing = Math.sin(a.animFrame) * 6;
+
+    if (a.type === 'mammoth') {
+      // 1. Mammoth Legs
+      ctx.lineWidth = 6;
+      ctx.strokeStyle = '#4a4440';
+      ctx.lineCap = 'round';
+      ctx.beginPath(); ctx.moveTo(-10, 4); ctx.lineTo(-10 - walkSwing, 15); ctx.stroke();
+      ctx.beginPath(); ctx.moveTo(-4, 4); ctx.lineTo(-4 + walkSwing, 15); ctx.stroke();
+      ctx.beginPath(); ctx.moveTo(4, 4); ctx.lineTo(4 - walkSwing, 15); ctx.stroke();
+      ctx.beginPath(); ctx.moveTo(10, 4); ctx.lineTo(10 + walkSwing, 15); ctx.stroke();
+
+      // 2. Giant Furry Body
+      ctx.fillStyle = '#5c524a';
+      ctx.beginPath();
+      ctx.ellipse(0, -2, 19, 14, 0, 0, Math.PI * 2);
+      ctx.fill();
+
+      // 3. Head & Ears
+      ctx.beginPath();
+      ctx.arc(14, -6, 8.5, 0, Math.PI * 2);
+      ctx.fill();
+
+      // Ear
+      ctx.fillStyle = '#4a4440';
+      ctx.beginPath();
+      ctx.ellipse(9, -6, 5.5, 7.5, 0.2, 0, Math.PI*2);
+      ctx.fill();
+
+      // 4. Curved Ivory Tusks
+      ctx.strokeStyle = '#eae6df';
+      ctx.lineWidth = 3.5;
+      ctx.beginPath();
+      ctx.moveTo(18, -4);
+      ctx.bezierCurveTo(25, -4, 27, -10, 25, -15);
+      ctx.stroke();
+
+      // 5. Trunk
+      ctx.strokeStyle = '#5c524a';
+      ctx.lineWidth = 4;
+      ctx.beginPath();
+      ctx.moveTo(20, -8);
+      ctx.quadraticCurveTo(23, 2, 19, 9);
+      ctx.stroke();
+
+      // Eye
+      ctx.fillStyle = '#000';
+      ctx.fillRect(14.5, -9, 1.5, 1.5);
+
+    } else if (a.type === 'boar') {
+      // 1. Boar Legs
+      ctx.lineWidth = 3.5;
+      ctx.strokeStyle = '#3a271d';
+      ctx.lineCap = 'round';
+      ctx.beginPath(); ctx.moveTo(-6, 4); ctx.lineTo(-6 - walkSwing, 11); ctx.stroke();
+      ctx.beginPath(); ctx.moveTo(-2, 4); ctx.lineTo(-2 + walkSwing, 11); ctx.stroke();
+      ctx.beginPath(); ctx.moveTo(2, 4); ctx.lineTo(2 - walkSwing, 11); ctx.stroke();
+      ctx.beginPath(); ctx.moveTo(6, 4); ctx.lineTo(6 + walkSwing, 11); ctx.stroke();
+
+      // 2. Body
+      ctx.fillStyle = '#4d3326';
+      ctx.beginPath();
+      ctx.roundRect(-10, -7, 20, 12, 4.5);
+      ctx.fill();
+
+      // Snout
+      ctx.beginPath();
+      ctx.moveTo(10, -3);
+      ctx.lineTo(15, -1);
+      ctx.lineTo(10, 3);
+      ctx.closePath();
+      ctx.fill();
+
+      // Spine Bristles
+      ctx.strokeStyle = '#2d1e17';
+      ctx.lineWidth = 1.5;
+      for (let i = -8; i <= 6; i += 3) {
+        ctx.beginPath();
+        ctx.moveTo(i, -7);
+        ctx.lineTo(i - 1, -10);
+        ctx.stroke();
+      }
+
+      // Small White Tusks
+      ctx.strokeStyle = '#fff';
+      ctx.lineWidth = 1.8;
+      ctx.beginPath();
+      ctx.moveTo(11, 0);
+      ctx.lineTo(13, -3);
+      ctx.stroke();
+
+      // Angry Eye
+      ctx.fillStyle = a.isHostile ? '#d62828' : '#000';
+      ctx.fillRect(9, -4, 1.5, 1.5);
+
+    } else if (a.type === 'rabbit') {
+      // Fluffy White Rabbit
+      ctx.fillStyle = '#eceae6';
+      
+      // Body
+      ctx.beginPath();
+      ctx.arc(0, 0, 7.5, 0, Math.PI * 2);
+      ctx.fill();
+
+      // Head
+      ctx.beginPath();
+      ctx.arc(6, -4, 4.5, 0, Math.PI * 2);
+      ctx.fill();
+
+      // Long ears
+      ctx.fillStyle = '#eceae6';
+      ctx.fillRect(4, -13, 2, 6);
+      ctx.fillRect(6, -12, 2, 5);
+      
+      ctx.fillStyle = '#ffb3c1'; // pink inner ear
+      ctx.fillRect(4.5, -11, 1, 4);
+
+      // Tail
+      ctx.fillStyle = '#eceae6';
+      ctx.beginPath();
+      ctx.arc(-7.5, 2, 2.8, 0, Math.PI*2);
+      ctx.fill();
+
+      // Paws
+      ctx.strokeStyle = '#eceae6';
+      ctx.lineWidth = 2.2;
+      ctx.beginPath(); ctx.moveTo(-3, 6); ctx.lineTo(-3 - walkSwing*0.5, 8); ctx.stroke();
+      ctx.beginPath(); ctx.moveTo(3, 6); ctx.lineTo(3 + walkSwing*0.5, 8); ctx.stroke();
+
+      // Pink eye
+      ctx.fillStyle = '#d62828';
+      ctx.beginPath();
+      ctx.arc(6.5, -5, 1, 0, Math.PI*2);
+      ctx.fill();
+    }
+
+    ctx.restore();
+  }
+
   renderVillagers() {
     const size = this.map.tileSize;
     gameState.villagers.forEach(v => {
@@ -744,54 +1173,24 @@ export class GameEngine {
       this.ctx.save();
       this.ctx.translate(vx, vy);
 
-      // Walk wobble animation
-      const isWalking = v.state === 'moving';
-      const wobble = isWalking ? Math.sin(v.animFrame) * 4 : 0;
-      
-      this.ctx.translate(0, wobble);
-
       // Selection outline
       if (this.selectedEntity === v) {
         this.ctx.strokeStyle = '#e08226';
         this.ctx.lineWidth = 1.5;
         this.ctx.beginPath();
-        this.ctx.arc(0, 10, 18, 0, Math.PI * 2);
+        this.ctx.arc(0, 0, 20, 0, Math.PI * 2);
         this.ctx.stroke();
       }
 
-      // Draw Avatar
-      let avatar = '👦'; // Default Male
-      if (v.gender === 'Female') avatar = '👧';
-      if (v.isChild) avatar = '👶';
-      if (v.state === 'sleeping') avatar = '💤';
-
-      this.ctx.font = '22px Arial';
-      this.ctx.textAlign = 'center';
-      this.ctx.textBaseline = 'middle';
-      this.ctx.fillText(avatar, 0, 0);
-
-      // Draw Carried Resource Badge
-      if (v.inventory.amount > 0) {
-        let badge = '🪵';
-        if (v.inventory.type === 'stone') badge = '🪨';
-        if (v.inventory.type === 'rawFood') badge = '🍒';
-        this.ctx.font = '10px Arial';
-        this.ctx.fillText(badge, 12, -12);
-      }
-
-      // Draw Weapon Badge
-      if (v.weapon !== 'none') {
-        const weaponIcon = v.weapon === 'axe' ? '🪓' : '🏹';
-        this.ctx.font = '11px Arial';
-        this.ctx.fillText(weaponIcon, -12, -12);
-      }
+      // Draw the Vector Human
+      this.drawVectorHuman(v, false);
 
       // Health bar above head (only if damaged or sick)
       if (v.health < 100 || v.isSick) {
         this.ctx.fillStyle = 'rgba(0,0,0,0.6)';
-        this.ctx.fillRect(-12, -22, 24, 3.5);
+        this.ctx.fillRect(-12, -26, 24, 3.5);
         this.ctx.fillStyle = v.isSick ? '#cf9fff' : '#c24634';
-        this.ctx.fillRect(-12, -22, 24 * (v.health / 100), 3.5);
+        this.ctx.fillRect(-12, -26, 24 * (v.health / 100), 3.5);
       }
 
       this.ctx.restore();
@@ -807,25 +1206,24 @@ export class GameEngine {
       this.ctx.save();
       this.ctx.translate(ex, ey);
 
-      // Walk wobble
-      this.ctx.translate(0, Math.sin(e.animFrame) * 4);
+      // Selection outline
+      if (this.selectedEntity === e) {
+        this.ctx.strokeStyle = '#c24634';
+        this.ctx.lineWidth = 1.5;
+        this.ctx.beginPath();
+        this.ctx.arc(0, 0, 20, 0, Math.PI * 2);
+        this.ctx.stroke();
+      }
 
-      // Raider Avatar
-      this.ctx.font = '22px Arial';
-      this.ctx.textAlign = 'center';
-      this.ctx.textBaseline = 'middle';
-      this.ctx.fillText('👹', 0, 0);
-
-      // Club weapon
-      this.ctx.font = '10px Arial';
-      this.ctx.fillText('🏏', -12, -10);
+      // Draw the Vector Human as an enemy cannibal
+      this.drawVectorHuman(e, true);
 
       // Health bar
       const hpPct = e.health / e.maxHealth;
       this.ctx.fillStyle = 'rgba(0,0,0,0.6)';
-      this.ctx.fillRect(-12, -22, 24, 3);
+      this.ctx.fillRect(-12, -26, 24, 3);
       this.ctx.fillStyle = '#c24634';
-      this.ctx.fillRect(-12, -22, 24 * hpPct, 3);
+      this.ctx.fillRect(-12, -26, 24 * hpPct, 3);
 
       this.ctx.restore();
     });
@@ -840,44 +1238,33 @@ export class GameEngine {
       this.ctx.save();
       this.ctx.translate(ax, ay);
 
-      // Walk bounce
-      this.ctx.translate(0, Math.abs(Math.sin(a.animFrame)) * -3);
-
-      let animalEmoji = '🐇';
-      if (a.type === 'boar') animalEmoji = '🐗';
-      else if (a.type === 'mammoth') animalEmoji = '🦣';
-
-      // Scale depending on size
-      let textScale = 18;
-      if (a.type === 'boar') textScale = 22;
-      if (a.type === 'mammoth') textScale = 34;
-
-      this.ctx.font = `${textScale}px Arial`;
-      this.ctx.textAlign = 'center';
-      this.ctx.textBaseline = 'middle';
-      
-      // Face left or right depending on direct
-      if (a.facing === 'left') {
-        this.ctx.scale(-1, 1); // Flip horizontally
+      // Selection outline
+      if (this.selectedEntity === a) {
+        this.ctx.strokeStyle = '#d8a02c';
+        this.ctx.lineWidth = 1.5;
+        this.ctx.beginPath();
+        this.ctx.arc(0, 0, a.type === 'mammoth' ? 30 : 20, 0, Math.PI * 2);
+        this.ctx.stroke();
       }
-      this.ctx.fillText(animalEmoji, 0, 0);
 
-      // Reset flip for HP bar
-      if (a.facing === 'left') this.ctx.scale(-1, 1);
+      // Draw Vector Animal
+      this.drawVectorAnimal(a);
 
       // Anger emoji if hostile
       if (a.isHostile) {
+        this.ctx.fillStyle = '#d62828';
         this.ctx.font = '10px Arial';
-        this.ctx.fillText('💢', 0, -textScale/2 - 8);
+        this.ctx.fillText('💢', 0, a.type === 'mammoth' ? -26 : -18);
       }
 
       // Draw hp bar if damaged
       if (a.health < a.maxHealth) {
         const hpPct = a.health / a.maxHealth;
+        const width = a.type === 'mammoth' ? 36 : 24;
         this.ctx.fillStyle = 'rgba(0,0,0,0.6)';
-        this.ctx.fillRect(-14, -textScale/2 - 4, 28, 3);
+        this.ctx.fillRect(-width/2, a.type === 'mammoth' ? -32 : -22, width, 3);
         this.ctx.fillStyle = '#c24634';
-        this.ctx.fillRect(-14, -textScale/2 - 4, 28 * hpPct, 3);
+        this.ctx.fillRect(-width/2, a.type === 'mammoth' ? -32 : -22, width * hpPct, 3);
       }
 
       this.ctx.restore();
