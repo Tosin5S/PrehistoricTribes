@@ -174,6 +174,9 @@ export class Villager {
       case 'mating':
         this.executeMating(deltaTime, gameMap);
         break;
+      case 'fighting':
+        this.executeFighting(deltaTime, gameMap);
+        break;
     }
   }
 
@@ -429,8 +432,8 @@ export class Villager {
       const threat = this.findClosestEnemy();
       if (threat) {
         this.target = threat;
-        this.path = gameMap.findPath(this.gridX, this.gridY, Math.floor(threat.visualX), Math.floor(threat.visualY));
-        this.state = 'moving';
+        this.state = 'fighting';
+        this.actionTimer = 0.5;
       } else {
         // Train in gym
         const gym = this.findClosestBuilding('gym');
@@ -689,11 +692,62 @@ export class Villager {
     this.target = null;
   }
 
+  executeFighting(deltaTime, gameMap) {
+    const target = this.target;
+    const isEnemy = gameState.enemies.includes(target);
+    const isAnimal = gameState.animals.includes(target);
+    if (!target || target.health <= 0 || (!isEnemy && !isAnimal)) {
+      this.target = null;
+      this.path = [];
+      
+      if (this.job === 'warrior') {
+        const nextThreat = this.findClosestEnemy();
+        if (nextThreat) {
+          this.target = nextThreat;
+          this.actionTimer = 0.5;
+          return;
+        }
+      }
+      this.state = 'idle';
+      return;
+    }
+
+    const tx = target.visualX;
+    const ty = target.visualY;
+    const dist = this.distTo(tx, ty);
+
+    if (dist <= 1.25) {
+      this.path = [];
+      const dx = tx - this.visualX;
+      const dy = ty - this.visualY;
+      this.facing = Math.abs(dx) > Math.abs(dy) ? (dx > 0 ? 'right' : 'left') : (dy > 0 ? 'down' : 'up');
+
+      this.actionTimer -= deltaTime;
+      if (this.actionTimer <= 0) {
+        target.takeDamage(this.getDamage(), this);
+        gameAudio.playCombatHit();
+        this.actionTimer = 1.2;
+        this.spawnParticle('⚔️');
+      }
+    } else {
+      if (this.path.length === 0 || Math.random() < 0.08) {
+        this.path = gameMap.findPath(this.gridX, this.gridY, Math.floor(tx), Math.floor(ty));
+      }
+      this.moveAlongPath(deltaTime);
+    }
+  }
+
   // Combat engagement
-  takeDamage(amount) {
+  takeDamage(amount, attacker) {
     this.health = Math.max(0, this.health - amount);
     this.mood = Math.max(0, this.mood - amount * 0.5);
     this.spawnParticle('💢');
+
+    if (!this.isChild && this.state !== 'fighting' && attacker && attacker.health > 0) {
+      this.target = attacker;
+      this.state = 'fighting';
+      this.actionTimer = 0.5;
+    }
   }
 
   die(gameMap) {
@@ -863,7 +917,7 @@ export class Enemy {
         this.path = []; // stop moving
         if (this.attackTimer <= 0) {
           this.attackTimer = 1.5; // seconds
-          target.takeDamage(this.damage);
+          target.takeDamage(this.damage, this);
           gameAudio.playCombatHit();
         }
       } else {
@@ -1016,7 +1070,7 @@ export class Animal {
           this.attackTimer -= deltaTime;
           if (this.attackTimer <= 0) {
             this.attackTimer = 1.8;
-            this.combatTarget.takeDamage(this.damage);
+            this.combatTarget.takeDamage(this.damage, this);
             gameAudio.playCombatHit();
           }
         } else {
