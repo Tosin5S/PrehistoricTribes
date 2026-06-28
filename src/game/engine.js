@@ -594,66 +594,188 @@ export class GameEngine {
   renderTerrain() {
     const size = this.map.tileSize;
     const now = Date.now();
+    const mapW = this.map.width * size;
+    const mapH = this.map.height * size;
 
-    for (let y = 0; y < this.map.height; y++) {
-      for (let x = 0; x < this.map.width; x++) {
-        const type = this.map.grid[y][x];
+    // 1. Draw base high-fidelity grass landscape with soft color gradients
+    const grassGrad = this.ctx.createLinearGradient(0, 0, mapW, mapH);
+    grassGrad.addColorStop(0, '#52a028');
+    grassGrad.addColorStop(0.5, '#5bb030');
+    grassGrad.addColorStop(1, '#4e9824');
+    this.ctx.fillStyle = grassGrad;
+    this.ctx.fillRect(0, 0, mapW, mapH);
 
-        if (type === 'grass') {
-          // Bright vibrant checkerboard-varied grass like the original game
-          const v = (x * 7 + y * 13) % 3;
-          this.ctx.fillStyle = v === 0 ? '#52a028' : v === 1 ? '#5ab030' : '#4e9824';
-        } else if (type === 'water') {
-          // Bright cheerful animated blue water
-          const shimmer = Math.sin(now / 700 + x * 0.8 + y * 0.6) * 6;
-          const g = Math.floor(130 + shimmer);
-          this.ctx.fillStyle = `rgb(28,${g},195)`;
-        } else if (type === 'sand') {
-          // Warm sandy riverbank
-          this.ctx.fillStyle = '#d4b060';
-        } else if (type === 'dirt') {
-          this.ctx.fillStyle = '#8a6c4c';
-        } else if (type === 'bridge') {
-          const shimmer = Math.sin(now / 700 + x * 0.8 + y * 0.6) * 6;
-          const g = Math.floor(130 + shimmer);
-          this.ctx.fillStyle = `rgb(28,${g},195)`;
-        }
+    // Add soft organic dark-green textured variations
+    this.ctx.fillStyle = 'rgba(0, 50, 0, 0.05)';
+    for (let i = 0; i < 40; i++) {
+      const rx = (i * 127) % mapW;
+      const ry = (i * 163) % mapH;
+      const rSize = 60 + (i % 5) * 40;
+      this.ctx.beginPath();
+      this.ctx.arc(rx, ry, rSize, 0, Math.PI * 2);
+      this.ctx.fill();
+    }
+    
+    // Draw procedural grass tufts and flowers in a natural scattered pattern
+    for (let y = 0; y < this.map.height; y += 2) {
+      for (let x = 0; x < this.map.width; x += 2) {
+        // Only scatter detail on grass areas
+        if (this.map.grid[y]?.[x] === 'grass') {
+          const px = x * size + ((x * 37 + y * 13) % 24) + 12;
+          const py = y * size + ((x * 19 + y * 47) % 24) + 12;
 
-        this.ctx.fillRect(x * size, y * size, size, size);
-
-        // Water ripple sparkles
-        if (type === 'water') {
-          const wave = Math.sin(now / 550 + x + y * 1.2) * 0.15 + 0.18;
-          this.ctx.strokeStyle = `rgba(255,255,255,${wave.toFixed(2)})`;
-          this.ctx.lineWidth = 1;
-          this.ctx.beginPath();
-          this.ctx.moveTo(x * size + 6, y * size + size * 0.4);
-          this.ctx.lineTo(x * size + 22, y * size + size * 0.4);
-          this.ctx.stroke();
-        } else if (type === 'bridge') {
-          // Draw wood planks overlay on water
-          this.ctx.fillStyle = '#855938';
-          this.ctx.fillRect(x * size, y * size + 4, size, size - 8);
-          // Planks lines
-          this.ctx.strokeStyle = '#5a3d24';
+          this.ctx.strokeStyle = 'rgba(30, 80, 15, 0.35)';
           this.ctx.lineWidth = 1.5;
-          for (let offset = 4; offset < size; offset += 8) {
+          this.ctx.beginPath();
+          this.ctx.moveTo(px, py);
+          this.ctx.lineTo(px - 4, py - 9);
+          this.ctx.moveTo(px, py);
+          this.ctx.lineTo(px + 4, py - 8);
+          this.ctx.stroke();
+
+          // Wild white daisy
+          if ((x * y + 3) % 8 === 0) {
+            this.ctx.fillStyle = '#ffffff';
             this.ctx.beginPath();
-            this.ctx.moveTo(x * size + offset, y * size + 4);
-            this.ctx.lineTo(x * size + offset, y * size + size - 4);
-            this.ctx.stroke();
+            this.ctx.arc(px + 8, py - 4, 1.8, 0, Math.PI * 2);
+            this.ctx.fill();
+            this.ctx.fillStyle = '#d8a02c';
+            this.ctx.beginPath();
+            this.ctx.arc(px + 8, py - 4, 0.7, 0, Math.PI * 2);
+            this.ctx.fill();
           }
-          // Ropes on borders
-          this.ctx.fillStyle = '#d4b07c';
-          this.ctx.fillRect(x * size, y * size + 4, size, 3);
-          this.ctx.fillRect(x * size, y * size + size - 7, size, 3);
-        } else if (type === 'grass') {
-          // Very subtle grass detail
-          this.ctx.strokeStyle = 'rgba(0,60,0,0.07)';
-          this.ctx.lineWidth = 0.5;
-          this.ctx.strokeRect(x * size, y * size, size, size);
         }
       }
+    }
+
+    // Helper to calculate river Y center from X index
+    const getRiverCenterY = (gridX) => {
+      const riverOffset = -2;
+      return (gridX + riverOffset + Math.sin(gridX * 0.4) * 2) * size + size / 2;
+    };
+
+    // 2. Draw Sand riverbed (thick, smooth vector line)
+    this.ctx.strokeStyle = '#d4b060';
+    this.ctx.lineWidth = size * 3.6;
+    this.ctx.lineCap = 'round';
+    this.ctx.lineJoin = 'round';
+    this.ctx.beginPath();
+    this.ctx.moveTo(-20, getRiverCenterY(-1));
+    for (let x = 0; x <= this.map.width; x++) {
+      this.ctx.lineTo(x * size + size / 2, getRiverCenterY(x));
+    }
+    this.ctx.stroke();
+
+    // 3. Draw Water River (narrower, smooth vector line on top)
+    const shimmer = Math.sin(now / 700) * 4;
+    const waterG = Math.floor(130 + shimmer);
+    this.ctx.strokeStyle = `rgb(28, ${waterG}, 195)`;
+    this.ctx.lineWidth = size * 2.4;
+    this.ctx.beginPath();
+    this.ctx.moveTo(-20, getRiverCenterY(-1));
+    for (let x = 0; x <= this.map.width; x++) {
+      this.ctx.lineTo(x * size + size / 2, getRiverCenterY(x));
+    }
+    this.ctx.stroke();
+
+    // 4. Draw Lake (bottom left)
+    const lakeX = 6.2 * size;
+    const lakeY = 24.2 * size;
+    
+    // Lake Sand shore
+    this.ctx.fillStyle = '#d4b060';
+    this.ctx.beginPath();
+    this.ctx.arc(lakeX, lakeY, 4.8 * size, 0, Math.PI * 2);
+    this.ctx.fill();
+
+    // Lake Water body
+    this.ctx.fillStyle = `rgb(28, ${waterG}, 195)`;
+    this.ctx.beginPath();
+    this.ctx.arc(lakeX, lakeY, 3.6 * size, 0, Math.PI * 2);
+    this.ctx.fill();
+
+    // 5. Draw Dirt Roads (crossroads) as clean wide lines with soft blending overlay
+    this.ctx.strokeStyle = '#8a6c4c';
+    this.ctx.lineWidth = size * 2.0;
+    this.ctx.lineCap = 'round';
+    this.ctx.lineJoin = 'round';
+    
+    const cx = Math.floor(this.map.width / 2) * size + size / 2;
+    const cy = Math.floor(this.map.height / 2) * size + size / 2;
+
+    // Horizontal road
+    this.ctx.beginPath();
+    this.ctx.moveTo(cx - 7 * size, cy);
+    this.ctx.lineTo(cx + 7 * size, cy);
+    this.ctx.stroke();
+
+    // Vertical road
+    this.ctx.beginPath();
+    this.ctx.moveTo(cx, cy - 7 * size);
+    this.ctx.lineTo(cx, cy + 7 * size);
+    this.ctx.stroke();
+
+    // Soft border shadow for road blending
+    this.ctx.strokeStyle = 'rgba(138, 108, 76, 0.35)';
+    this.ctx.lineWidth = size * 2.3;
+    this.ctx.beginPath();
+    this.ctx.moveTo(cx - 7 * size, cy);
+    this.ctx.lineTo(cx + 7 * size, cy);
+    this.ctx.stroke();
+    
+    this.ctx.beginPath();
+    this.ctx.moveTo(cx, cy - 7 * size);
+    this.ctx.lineTo(cx, cy + 7 * size);
+    this.ctx.stroke();
+
+    // 6. Draw Bridges at x = 8 and x = 24
+    [8, 24].forEach(bx => {
+      const bX = bx * size;
+      const bYStart = getRiverCenterY(bx) - size * 1.5;
+      const bYEnd = getRiverCenterY(bx) + size * 1.5;
+
+      // Draw blue water under the bridge deck
+      this.ctx.fillStyle = `rgb(28, ${waterG}, 195)`;
+      this.ctx.fillRect(bX - 2, bYStart, size + 4, bYEnd - bYStart);
+
+      // Support pillar posts
+      this.ctx.fillStyle = '#4a2f18';
+      this.ctx.fillRect(bX + 3, bYStart - 6, 6, 8);
+      this.ctx.fillRect(bX + size - 9, bYStart - 6, 6, 8);
+      this.ctx.fillRect(bX + 3, bYEnd - 2, 6, 8);
+      this.ctx.fillRect(bX + size - 9, bYEnd - 2, 6, 8);
+
+      // Wood deck planks
+      this.ctx.fillStyle = '#855938';
+      this.ctx.fillRect(bX, bYStart, size, bYEnd - bYStart);
+
+      // Planks seams
+      this.ctx.strokeStyle = '#5a3d24';
+      this.ctx.lineWidth = 1.8;
+      for (let y = bYStart + 4; y < bYEnd; y += 8) {
+        this.ctx.beginPath();
+        this.ctx.moveTo(bX, y);
+        this.ctx.lineTo(bX + size, y);
+        this.ctx.stroke();
+      }
+
+      // Handrails
+      this.ctx.fillStyle = '#d4b07c';
+      this.ctx.fillRect(bX, bYStart, 4, bYEnd - bYStart);
+      this.ctx.fillRect(bX + size - 4, bYStart, 4, bYEnd - bYStart);
+    });
+
+    // 7. Water ripples (white wind streaks)
+    this.ctx.lineWidth = 1.2;
+    for (let x = 2; x < this.map.width; x += 4) {
+      const rx = x * size;
+      const ry = getRiverCenterY(x) + Math.sin(now / 600 + x) * 12;
+      const wave = Math.sin(now / 550 + x) * 0.15 + 0.18;
+      this.ctx.strokeStyle = `rgba(255, 255, 255, ${wave.toFixed(2)})`;
+      this.ctx.beginPath();
+      this.ctx.moveTo(rx, ry);
+      this.ctx.lineTo(rx + 20, ry);
+      this.ctx.stroke();
     }
   }
 
@@ -2098,10 +2220,19 @@ export class GameEngine {
 
       // Selection outline
       if (this.selectedEntity === v) {
-        this.ctx.strokeStyle = '#e08226';
-        this.ctx.lineWidth = 1.5;
+        const angle = (Date.now() / 400) % (Math.PI * 2);
+        this.ctx.strokeStyle = 'rgba(224, 130, 38, 0.85)';
+        this.ctx.lineWidth = 2.0;
+        this.ctx.setLineDash([4, 4]);
         this.ctx.beginPath();
-        this.ctx.arc(0, 0, 20, 0, Math.PI * 2);
+        this.ctx.arc(0, 8, 16, angle, angle + Math.PI * 2);
+        this.ctx.stroke();
+        this.ctx.setLineDash([]);
+        
+        this.ctx.strokeStyle = 'rgba(224, 130, 38, 0.25)';
+        this.ctx.lineWidth = 4.0;
+        this.ctx.beginPath();
+        this.ctx.arc(0, 8, 16, 0, Math.PI * 2);
         this.ctx.stroke();
       }
 
@@ -2131,10 +2262,19 @@ export class GameEngine {
 
       // Selection outline
       if (this.selectedEntity === e) {
-        this.ctx.strokeStyle = '#c24634';
-        this.ctx.lineWidth = 1.5;
+        const angle = (Date.now() / 400) % (Math.PI * 2);
+        this.ctx.strokeStyle = 'rgba(194, 70, 52, 0.85)';
+        this.ctx.lineWidth = 2.0;
+        this.ctx.setLineDash([4, 4]);
         this.ctx.beginPath();
-        this.ctx.arc(0, 0, 20, 0, Math.PI * 2);
+        this.ctx.arc(0, 8, 16, -angle, -angle + Math.PI * 2);
+        this.ctx.stroke();
+        this.ctx.setLineDash([]);
+        
+        this.ctx.strokeStyle = 'rgba(194, 70, 52, 0.25)';
+        this.ctx.lineWidth = 4.0;
+        this.ctx.beginPath();
+        this.ctx.arc(0, 8, 16, 0, Math.PI * 2);
         this.ctx.stroke();
       }
 
@@ -2163,10 +2303,20 @@ export class GameEngine {
 
       // Selection outline
       if (this.selectedEntity === a) {
-        this.ctx.strokeStyle = '#d8a02c';
-        this.ctx.lineWidth = 1.5;
+        const radius = a.type === 'mammoth' ? 28 : 16;
+        const angle = (Date.now() / 400) % (Math.PI * 2);
+        this.ctx.strokeStyle = 'rgba(216, 160, 44, 0.85)';
+        this.ctx.lineWidth = 2.0;
+        this.ctx.setLineDash([4, 4]);
         this.ctx.beginPath();
-        this.ctx.arc(0, 0, a.type === 'mammoth' ? 30 : 20, 0, Math.PI * 2);
+        this.ctx.arc(0, a.type === 'mammoth' ? 8 : 4, radius, angle, angle + Math.PI * 2);
+        this.ctx.stroke();
+        this.ctx.setLineDash([]);
+        
+        this.ctx.strokeStyle = 'rgba(216, 160, 44, 0.25)';
+        this.ctx.lineWidth = 4.0;
+        this.ctx.beginPath();
+        this.ctx.arc(0, a.type === 'mammoth' ? 8 : 4, radius, 0, Math.PI * 2);
         this.ctx.stroke();
       }
 
