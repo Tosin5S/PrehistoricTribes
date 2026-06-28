@@ -8,6 +8,7 @@ export class GameMap {
 
     this.grid = []; // 2D array of tile types: 'grass', 'water', 'sand'
     this.collisionGrid = []; // 2D array of booleans: true = blocked
+    this.heightGrid = []; // 2D array of integers: 0 = water, 1 = plains, 2 = hill
     this.resources = []; // List of resource instances: Trees, Rocks, etc.
     this.resourceIdCounter = 0;
 
@@ -101,6 +102,44 @@ export class GameMap {
           if (this.grid[hy][hx] === 'grass' || this.grid[hy][hx] === 'sand') {
             this.grid[hy][hx] = 'dirt';
           }
+        }
+      }
+    }
+
+    // Generate height grid
+    this.heightGrid = [];
+    for (let y = 0; y < this.height; y++) {
+      const hRow = [];
+      for (let x = 0; x < this.width; x++) {
+        hRow.push(1); // default plains height
+      }
+      this.heightGrid.push(hRow);
+    }
+
+    // Circular hills/plateaus overlay
+    const hills = [
+      { cx: 28, cy: 5, r: 6, maxH: 2 },
+      { cx: 4, cy: 28, r: 5, maxH: 2 },
+      { cx: 27, cy: 26, r: 6, maxH: 2 }
+    ];
+
+    hills.forEach(hill => {
+      for (let y = 0; y < this.height; y++) {
+        for (let x = 0; x < this.width; x++) {
+          const dist = Math.sqrt((x - hill.cx) ** 2 + (y - hill.cy) ** 2);
+          if (dist < hill.r) {
+            const h = dist < hill.r * 0.55 ? hill.maxH : hill.maxH - 1;
+            this.heightGrid[y][x] = Math.max(this.heightGrid[y][x], h);
+          }
+        }
+      }
+    });
+
+    // Make sure water is at height 0
+    for (let y = 0; y < this.height; y++) {
+      for (let x = 0; x < this.width; x++) {
+        if (this.grid[y][x] === 'water') {
+          this.heightGrid[y][x] = 0;
         }
       }
     }

@@ -11,6 +11,22 @@ export class GameEngine {
     
     this.map = new GameMap(32, 32);
     
+    // Load original Tzar terrain spritesheets
+    this.terrainImages = {
+      grass: new Image(),
+      dirt: new Image(),
+      water: new Image(),
+      loaded: { grass: false, dirt: false, water: false }
+    };
+
+    this.terrainImages.grass.onload = () => { this.terrainImages.loaded.grass = true; };
+    this.terrainImages.dirt.onload = () => { this.terrainImages.loaded.dirt = true; };
+    this.terrainImages.water.onload = () => { this.terrainImages.loaded.water = true; };
+
+    this.terrainImages.grass.src = '/Tzar/IMAGES/TERRAIN/GRASS/22.BMP';
+    this.terrainImages.dirt.src = '/Tzar/IMAGES/TERRAIN/GRASS/11.BMP';
+    this.terrainImages.water.src = '/Tzar/IMAGES/TERRAIN/GRASS/00.BMP';
+    
     // Viewport camera controls
     this.camera = {
       x: 16 * 64 - window.innerWidth / 2, // Center camera on middle of grid
@@ -597,44 +613,88 @@ export class GameEngine {
     const mapW = this.map.width * size;
     const mapH = this.map.height * size;
 
-    // 1. Draw base high-fidelity grass landscape with soft color gradients
-    const grassGrad = this.ctx.createLinearGradient(0, 0, mapW, mapH);
-    grassGrad.addColorStop(0, '#52a028');
-    grassGrad.addColorStop(0.5, '#5bb030');
-    grassGrad.addColorStop(1, '#4e9824');
-    this.ctx.fillStyle = grassGrad;
-    this.ctx.fillRect(0, 0, mapW, mapH);
-
-    // Add soft organic dark-green textured variations
-    this.ctx.fillStyle = 'rgba(0, 50, 0, 0.05)';
-    for (let i = 0; i < 40; i++) {
-      const rx = (i * 127) % mapW;
-      const ry = (i * 163) % mapH;
-      const rSize = 60 + (i % 5) * 40;
-      this.ctx.beginPath();
-      this.ctx.arc(rx, ry, rSize, 0, Math.PI * 2);
-      this.ctx.fill();
-    }
+    this.ctx.save();
     
-    // Draw procedural grass tufts and flowers in a natural scattered pattern
+    // Disable image smoothing to get that clean retro pixel-art scaling
+    this.ctx.imageSmoothingEnabled = false;
+
+    // PASS 1: Draw base terrain tiles (Grass, Sand, Dirt, Water) from Tzar spritesheets
+    for (let y = 0; y < this.map.height; y++) {
+      for (let x = 0; x < this.map.width; x++) {
+        const type = this.map.grid[y][x];
+        const px = x * size;
+        const py = y * size;
+
+        if (type === 'water' || type === 'bridge') {
+          // Render animated water from 00.BMP (16 cols x 80 rows of 32x32 tiles)
+          if (this.terrainImages.loaded.water) {
+            const frame = Math.floor(now / 160) % 10;
+            const localRow = (x * 3 + y * 7) % 8;
+            const col = (x * 5 + y * 3) % 16;
+            const tileY = frame * 8 + localRow;
+            this.ctx.drawImage(
+              this.terrainImages.water,
+              col * 32, tileY * 32, 32, 32,
+              px, py, size, size
+            );
+          } else {
+            const shimmer = Math.sin(now / 700 + x * 0.8 + y * 0.6) * 6;
+            this.ctx.fillStyle = `rgb(28, ${Math.floor(130 + shimmer)}, 195)`;
+            this.ctx.fillRect(px, py, size, size);
+          }
+        } else if (type === 'sand') {
+          this.ctx.fillStyle = '#d4b060';
+          this.ctx.fillRect(px, py, size, size);
+        } else if (type === 'dirt') {
+          // Render dirt path from 11.BMP (32 cols x 32 rows of 32x32 tiles)
+          if (this.terrainImages.loaded.dirt) {
+            const tileIndex = (x * 3 + y * 5) % 64;
+            const srcX = (tileIndex % 32) * 32;
+            const srcY = Math.floor(tileIndex / 32) * 32;
+            this.ctx.drawImage(
+              this.terrainImages.dirt,
+              srcX, srcY, 32, 32,
+              px, py, size, size
+            );
+          } else {
+            this.ctx.fillStyle = '#8a6c4c';
+            this.ctx.fillRect(px, py, size, size);
+          }
+        } else {
+          // Render Grass from 22.BMP (32 cols x 32 rows of 32x32 tiles)
+          if (this.terrainImages.loaded.grass) {
+            const tileIndex = (x * 7 + y * 13) % 64;
+            const srcX = (tileIndex % 32) * 32;
+            const srcY = Math.floor(tileIndex / 32) * 32;
+            this.ctx.drawImage(
+              this.terrainImages.grass,
+              srcX, srcY, 32, 32,
+              px, py, size, size
+            );
+          } else {
+            const grassGrad = this.ctx.createLinearGradient(0, 0, mapW, mapH);
+            grassGrad.addColorStop(0, '#52a028');
+            grassGrad.addColorStop(0.5, '#5bb030');
+            grassGrad.addColorStop(1, '#4e9824');
+            this.ctx.fillStyle = grassGrad;
+            this.ctx.fillRect(px, py, size, size);
+          }
+        }
+      }
+    }
+
+    // Restore smoothing for details
+    this.ctx.imageSmoothingEnabled = true;
+
+    // PASS 2: Natural scattered clutter details on grass
     for (let y = 0; y < this.map.height; y += 2) {
       for (let x = 0; x < this.map.width; x += 2) {
-        // Only scatter detail on grass areas
         if (this.map.grid[y]?.[x] === 'grass') {
           const px = x * size + ((x * 37 + y * 13) % 24) + 12;
           const py = y * size + ((x * 19 + y * 47) % 24) + 12;
 
-          this.ctx.strokeStyle = 'rgba(30, 80, 15, 0.35)';
-          this.ctx.lineWidth = 1.5;
-          this.ctx.beginPath();
-          this.ctx.moveTo(px, py);
-          this.ctx.lineTo(px - 4, py - 9);
-          this.ctx.moveTo(px, py);
-          this.ctx.lineTo(px + 4, py - 8);
-          this.ctx.stroke();
-
-          // Wild white daisy
-          if ((x * y + 3) % 8 === 0) {
+          const seed = (x * 17 + y * 23) % 10;
+          if (seed === 0) {
             this.ctx.fillStyle = '#ffffff';
             this.ctx.beginPath();
             this.ctx.arc(px + 8, py - 4, 1.8, 0, Math.PI * 2);
@@ -643,109 +703,203 @@ export class GameEngine {
             this.ctx.beginPath();
             this.ctx.arc(px + 8, py - 4, 0.7, 0, Math.PI * 2);
             this.ctx.fill();
+          } else if (seed === 1) {
+            this.ctx.fillStyle = '#e63946';
+            this.ctx.beginPath();
+            this.ctx.arc(px - 6, py + 8, 2.0, 0, Math.PI * 2);
+            this.ctx.fill();
+            this.ctx.fillStyle = '#222';
+            this.ctx.beginPath();
+            this.ctx.arc(px - 6, py + 8, 0.7, 0, Math.PI * 2);
+            this.ctx.fill();
+          } else if (seed === 2) {
+            this.ctx.fillStyle = '#8b5a2b';
+            this.ctx.beginPath();
+            this.ctx.arc(px + 4, py + 4, 2.8, Math.PI, 0);
+            this.ctx.fill();
+            this.ctx.fillStyle = '#eceae6';
+            this.ctx.fillRect(px + 3, py + 4, 2, 3);
+          } else if (seed === 3) {
+            this.ctx.fillStyle = '#5c3a21';
+            this.ctx.fillRect(px - 8, py - 2, 16, 4);
+            this.ctx.fillStyle = '#3a2010';
+            this.ctx.beginPath();
+            this.ctx.arc(px - 8, py, 1.8, 0, Math.PI * 2);
+            this.ctx.arc(px + 8, py, 1.8, 0, Math.PI * 2);
+            this.ctx.fill();
+          } else if (seed >= 4 && seed <= 6) {
+            this.ctx.strokeStyle = 'rgba(30, 80, 15, 0.35)';
+            this.ctx.lineWidth = 1.5;
+            this.ctx.beginPath();
+            this.ctx.moveTo(px, py);
+            this.ctx.lineTo(px - 4, py - 9);
+            this.ctx.moveTo(px, py);
+            this.ctx.lineTo(px + 4, py - 8);
+            this.ctx.stroke();
           }
         }
       }
     }
 
-    // Helper to calculate river Y center from X index
-    const getRiverCenterY = (gridX) => {
-      const riverOffset = -2;
-      return (gridX + riverOffset + Math.sin(gridX * 0.4) * 2) * size + size / 2;
-    };
-
-    // 2. Draw Sand riverbed (thick, smooth vector line)
-    this.ctx.strokeStyle = '#d4b060';
-    this.ctx.lineWidth = size * 3.6;
-    this.ctx.lineCap = 'round';
-    this.ctx.lineJoin = 'round';
-    this.ctx.beginPath();
-    this.ctx.moveTo(-20, getRiverCenterY(-1));
-    for (let x = 0; x <= this.map.width; x++) {
-      this.ctx.lineTo(x * size + size / 2, getRiverCenterY(x));
+    // PASS 3: Sand textures & beach details
+    for (let x = 0; x <= this.map.width; x += 2) {
+      const ry = (x - 2 + Math.sin(x * 0.4) * 2) * size + size / 2;
+      const rx = x * size + size / 2;
+      
+      const seed = (x * 37) % 5;
+      if (seed === 0) {
+        this.ctx.fillStyle = '#9c9c9c';
+        this.ctx.beginPath();
+        this.ctx.ellipse(rx + 16, ry - size * 1.4, 2.8, 1.8, 0.5, 0, Math.PI * 2);
+        this.ctx.fill();
+      } else if (seed === 1) {
+        this.ctx.fillStyle = '#7a5435';
+        this.ctx.beginPath();
+        this.ctx.ellipse(rx - 20, ry + size * 1.38, 2.4, 1.6, -0.4, 0, Math.PI * 2);
+        this.ctx.fill();
+      } else if (seed === 2) {
+        this.ctx.fillStyle = '#f3eae1';
+        this.ctx.beginPath();
+        this.ctx.arc(rx + 12, ry + size * 1.3, 1.5, 0, Math.PI * 2);
+        this.ctx.fill();
+      }
     }
-    this.ctx.stroke();
 
-    // 3. Draw Water River (narrower, smooth vector line on top)
-    const shimmer = Math.sin(now / 700) * 4;
-    const waterG = Math.floor(130 + shimmer);
-    this.ctx.strokeStyle = `rgb(28, ${waterG}, 195)`;
-    this.ctx.lineWidth = size * 2.4;
-    this.ctx.beginPath();
-    this.ctx.moveTo(-20, getRiverCenterY(-1));
-    for (let x = 0; x <= this.map.width; x++) {
-      this.ctx.lineTo(x * size + size / 2, getRiverCenterY(x));
-    }
-    this.ctx.stroke();
-
-    // 4. Draw Lake (bottom left)
+    // Lake sand pebbles
     const lakeX = 6.2 * size;
     const lakeY = 24.2 * size;
-    
-    // Lake Sand shore
-    this.ctx.fillStyle = '#d4b060';
-    this.ctx.beginPath();
-    this.ctx.arc(lakeX, lakeY, 4.8 * size, 0, Math.PI * 2);
-    this.ctx.fill();
+    for (let angle = 0; angle < Math.PI * 2; angle += 0.35) {
+      const radius = 4.3 * size + (Math.sin(angle * 4) * 8);
+      const px = lakeX + Math.cos(angle) * radius;
+      const py = lakeY + Math.sin(angle) * radius;
+      
+      const seed = Math.floor(angle * 10) % 4;
+      if (seed === 0) {
+        this.ctx.fillStyle = '#8c8c8c';
+        this.ctx.beginPath();
+        this.ctx.ellipse(px, py, 3.0, 1.8, angle, 0, Math.PI * 2);
+        this.ctx.fill();
+      } else if (seed === 1) {
+        this.ctx.fillStyle = '#eae6df';
+        this.ctx.beginPath();
+        this.ctx.arc(px, py, 1.4, 0, Math.PI * 2);
+        this.ctx.fill();
+      }
+    }
 
-    // Lake Water body
-    this.ctx.fillStyle = `rgb(28, ${waterG}, 195)`;
-    this.ctx.beginPath();
-    this.ctx.arc(lakeX, lakeY, 3.6 * size, 0, Math.PI * 2);
-    this.ctx.fill();
+    // PASS 4: Animated Shoreline Foam
+    this.ctx.strokeStyle = 'rgba(255, 255, 255, 0.42)';
+    this.ctx.lineWidth = 2.0;
 
-    // 5. Draw Dirt Roads (crossroads) as clean wide lines with soft blending overlay
-    this.ctx.strokeStyle = '#8a6c4c';
-    this.ctx.lineWidth = size * 2.0;
-    this.ctx.lineCap = 'round';
-    this.ctx.lineJoin = 'round';
-    
+    // Upper shore foam
+    this.ctx.beginPath();
+    for (let x = 0; x <= this.map.width; x++) {
+      const rx = x * size + size / 2;
+      const ry = (x - 2 + Math.sin(x * 0.4) * 2) * size + size / 2 - size * 1.25 + Math.sin(now / 350 + x * 0.6) * 3.5;
+      if (x === 0) this.ctx.moveTo(rx, ry);
+      else this.ctx.lineTo(rx, ry);
+    }
+    this.ctx.stroke();
+
+    // Lower shore foam
+    this.ctx.beginPath();
+    for (let x = 0; x <= this.map.width; x++) {
+      const rx = x * size + size / 2;
+      const ry = (x - 2 + Math.sin(x * 0.4) * 2) * size + size / 2 + size * 1.25 + Math.sin(now / 350 + x * 0.6 + Math.PI) * 3.5;
+      if (x === 0) this.ctx.moveTo(rx, ry);
+      else this.ctx.lineTo(rx, ry);
+    }
+    this.ctx.stroke();
+
+    // Lake shore foam
+    const lakeWaveRadius = 4.0 * size + Math.sin(now / 350) * 3.0;
+    this.ctx.beginPath();
+    this.ctx.arc(lakeX, lakeY, lakeWaveRadius, 0, Math.PI * 2);
+    this.ctx.stroke();
+
+    // PASS 5: Crossroads dirt road blending path
+    this.ctx.strokeStyle = 'rgba(138, 108, 76, 0.2)';
+    this.ctx.lineWidth = size * 2.3;
     const cx = Math.floor(this.map.width / 2) * size + size / 2;
     const cy = Math.floor(this.map.height / 2) * size + size / 2;
-
-    // Horizontal road
     this.ctx.beginPath();
-    this.ctx.moveTo(cx - 7 * size, cy);
-    this.ctx.lineTo(cx + 7 * size, cy);
+    this.ctx.moveTo(cx - 7 * size, cy); this.ctx.lineTo(cx + 7 * size, cy);
+    this.ctx.stroke();
+    this.ctx.beginPath();
+    this.ctx.moveTo(cx, cy - 7 * size); this.ctx.lineTo(cx, cy + 7 * size);
     this.ctx.stroke();
 
-    // Vertical road
-    this.ctx.beginPath();
-    this.ctx.moveTo(cx, cy - 7 * size);
-    this.ctx.lineTo(cx, cy + 7 * size);
-    this.ctx.stroke();
+    // PASS 6: 3D Height elevations / plateaus
+    for (let y = 0; y < this.map.height; y++) {
+      for (let x = 0; x < this.map.width; x++) {
+        const hCurrent = this.map.heightGrid[y]?.[x] || 0;
+        if (hCurrent > 0) {
+          const px = x * size;
+          const py = y * size;
 
-    // Soft border shadow for road blending
-    this.ctx.strokeStyle = 'rgba(138, 108, 76, 0.35)';
-    this.ctx.lineWidth = size * 2.3;
-    this.ctx.beginPath();
-    this.ctx.moveTo(cx - 7 * size, cy);
-    this.ctx.lineTo(cx + 7 * size, cy);
-    this.ctx.stroke();
-    
-    this.ctx.beginPath();
-    this.ctx.moveTo(cx, cy - 7 * size);
-    this.ctx.lineTo(cx, cy + 7 * size);
-    this.ctx.stroke();
+          const hTop = y > 0 ? this.map.heightGrid[y - 1]?.[x] : hCurrent;
+          if (hTop < hCurrent) {
+            this.ctx.fillStyle = 'rgba(255, 255, 255, 0.2)';
+            this.ctx.fillRect(px, py, size, 5);
+          }
 
-    // 6. Draw Bridges at x = 8 and x = 24
+          const hLeft = x > 0 ? this.map.heightGrid[y]?.[x - 1] : hCurrent;
+          if (hLeft < hCurrent) {
+            this.ctx.fillStyle = 'rgba(255, 255, 255, 0.2)';
+            this.ctx.fillRect(px, py, 5, size);
+          }
+
+          const hBottom = y < this.map.height - 1 ? this.map.heightGrid[y + 1]?.[x] : hCurrent;
+          if (hBottom < hCurrent) {
+            this.ctx.fillStyle = '#7a5435';
+            this.ctx.fillRect(px, py + size - 8, size, 8);
+            this.ctx.fillStyle = 'rgba(0, 0, 0, 0.22)';
+            this.ctx.fillRect(px, py + size, size, 8);
+          }
+
+          const hRight = x < this.map.width - 1 ? this.map.heightGrid[y]?.[x + 1] : hCurrent;
+          if (hRight < hCurrent) {
+            this.ctx.fillStyle = '#7a5435';
+            this.ctx.fillRect(px + size - 8, py, 8, size);
+            this.ctx.fillStyle = 'rgba(0, 0, 0, 0.22)';
+            this.ctx.fillRect(px + size, py, 8, size);
+          }
+        }
+      }
+    }
+
+    // PASS 7: Bridges wood plank structures
     [8, 24].forEach(bx => {
       const bX = bx * size;
-      const bYStart = getRiverCenterY(bx) - size * 1.5;
-      const bYEnd = getRiverCenterY(bx) + size * 1.5;
+      const bYStart = (bx - 2 + Math.sin(bx * 0.4) * 2) * size + size / 2 - size * 1.5;
+      const bYEnd = (bx - 2 + Math.sin(bx * 0.4) * 2) * size + size / 2 + size * 1.5;
 
-      // Draw blue water under the bridge deck
-      this.ctx.fillStyle = `rgb(28, ${waterG}, 195)`;
-      this.ctx.fillRect(bX - 2, bYStart, size + 4, bYEnd - bYStart);
+      // Underlay water
+      if (this.terrainImages.loaded.water) {
+        this.ctx.save();
+        this.ctx.imageSmoothingEnabled = false;
+        const frame = Math.floor(now / 160) % 10;
+        for (let y = Math.floor(bYStart / size); y <= Math.ceil(bYEnd / size); y++) {
+          const localRow = (bx * 3 + y * 7) % 8;
+          const col = (bx * 5 + y * 3) % 16;
+          const tileY = frame * 8 + localRow;
+          this.ctx.drawImage(
+            this.terrainImages.water,
+            col * 32, tileY * 32, 32, 32,
+            bX, y * size, size, size
+          );
+        }
+        this.ctx.restore();
+      }
 
-      // Support pillar posts
+      // Pillar posts
       this.ctx.fillStyle = '#4a2f18';
       this.ctx.fillRect(bX + 3, bYStart - 6, 6, 8);
       this.ctx.fillRect(bX + size - 9, bYStart - 6, 6, 8);
       this.ctx.fillRect(bX + 3, bYEnd - 2, 6, 8);
       this.ctx.fillRect(bX + size - 9, bYEnd - 2, 6, 8);
 
-      // Wood deck planks
+      // Deck planks
       this.ctx.fillStyle = '#855938';
       this.ctx.fillRect(bX, bYStart, size, bYEnd - bYStart);
 
@@ -765,18 +919,7 @@ export class GameEngine {
       this.ctx.fillRect(bX + size - 4, bYStart, 4, bYEnd - bYStart);
     });
 
-    // 7. Water ripples (white wind streaks)
-    this.ctx.lineWidth = 1.2;
-    for (let x = 2; x < this.map.width; x += 4) {
-      const rx = x * size;
-      const ry = getRiverCenterY(x) + Math.sin(now / 600 + x) * 12;
-      const wave = Math.sin(now / 550 + x) * 0.15 + 0.18;
-      this.ctx.strokeStyle = `rgba(255, 255, 255, ${wave.toFixed(2)})`;
-      this.ctx.beginPath();
-      this.ctx.moveTo(rx, ry);
-      this.ctx.lineTo(rx + 20, ry);
-      this.ctx.stroke();
-    }
+    this.ctx.restore();
   }
 
 
@@ -2368,8 +2511,40 @@ export class GameEngine {
 
   renderShadows() {
     const size = this.map.tileSize;
-    const allEntities = [...gameState.villagers, ...gameState.enemies, ...gameState.animals];
 
+    // 1. Draw shadows for resources (trees and rocks)
+    this.map.resources.forEach(r => {
+      const rx = r.x * size + size / 2;
+      const ry = r.y * size + size / 2;
+      
+      this.ctx.save();
+      this.ctx.fillStyle = 'rgba(0, 0, 0, 0.22)';
+      this.ctx.beginPath();
+      if (r.type === 'tree') {
+        this.ctx.ellipse(rx + 8, ry + 16, 12, 6, 0.4, 0, Math.PI * 2);
+      } else if (r.type === 'rock') {
+        this.ctx.ellipse(rx + 6, ry + 10, 16, 8, 0.2, 0, Math.PI * 2);
+      }
+      this.ctx.fill();
+      this.ctx.restore();
+    });
+
+    // 2. Draw shadows for buildings
+    gameState.buildings.forEach(b => {
+      const bx = b.x * size;
+      const by = b.y * size;
+      const bw = b.width * size;
+      const bh = b.height * size;
+
+      this.ctx.save();
+      this.ctx.fillStyle = 'rgba(0, 0, 0, 0.24)';
+      this.ctx.fillRect(bx + 8, by + bh - 4, bw, 8);
+      this.ctx.fillRect(bx + bw - 4, by + 8, 8, bh - 8);
+      this.ctx.restore();
+    });
+
+    // 3. Draw shadows for units (villagers, enemies, animals)
+    const allEntities = [...gameState.villagers, ...gameState.enemies, ...gameState.animals];
     allEntities.forEach(entity => {
       const ex = entity.visualX * size + size / 2;
       const ey = entity.visualY * size + size / 2;
@@ -2378,16 +2553,19 @@ export class GameEngine {
       const isBoar = entity.type === 'boar';
       const sw = isMammoth ? 26 : (isBoar ? 14 : 11);
       const sh = isMammoth ? 7 : (isBoar ? 4 : 3);
-      const oy = isMammoth ? 18 : (isBoar ? 10 : 18); // offset below feet
+      const oy = isMammoth ? 18 : (isBoar ? 10 : 18);
 
-      const grad = this.ctx.createRadialGradient(ex, ey + oy, 0, ex, ey + oy, sw);
-      grad.addColorStop(0, 'rgba(0,0,0,0.32)');
+      const sx = ex + 4;
+      const sy = ey + oy + 2;
+
+      const grad = this.ctx.createRadialGradient(sx, sy, 0, sx, sy, sw);
+      grad.addColorStop(0, 'rgba(0,0,0,0.35)');
       grad.addColorStop(1, 'rgba(0,0,0,0)');
 
       this.ctx.save();
       this.ctx.fillStyle = grad;
       this.ctx.beginPath();
-      this.ctx.ellipse(ex, ey + oy, sw, sh, 0, 0, Math.PI * 2);
+      this.ctx.ellipse(sx, sy, sw, sh, 0, 0, Math.PI * 2);
       this.ctx.fill();
       this.ctx.restore();
     });
