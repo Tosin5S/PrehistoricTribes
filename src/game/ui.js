@@ -171,6 +171,7 @@ export class GameUI {
     buildBtns.forEach(btn => {
       const type = btn.dataset.building;
       const meta = BUILDING_TYPES[type];
+      if (!meta) return;
       
       // Highlight if active placement mode
       if (this.engine.buildPlacementMode === type) {

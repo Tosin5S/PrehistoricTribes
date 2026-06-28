@@ -68,16 +68,38 @@ export const BUILDING_TYPES = {
     icon: '🧪',
     description: 'Enables Shamans to cure sick villagers and control disease.'
   },
-  tower: {
-    type: 'tower',
-    name: 'Tower',
-    costWood: 70,
-    costStone: 50,
+  farm: {
+    type: 'farm',
+    name: 'Farm',
+    costWood: 50,
+    costStone: 0,
+    width: 2,
+    height: 2,
+    maxProgress: 90,
+    icon: '🌾',
+    description: 'Provides local crop fields for Gatherers.'
+  },
+  wall: {
+    type: 'wall',
+    name: 'Wall',
+    costWood: 5,
+    costStone: 0,
     width: 1,
     height: 1,
-    maxProgress: 80,
-    icon: '🏹',
-    description: 'Watchtower that automatically shoots arrows at rival raiders.'
+    maxProgress: 40,
+    icon: '🪵',
+    description: 'Wood Wall blocks enemies.'
+  },
+  gate: {
+    type: 'gate',
+    name: 'Gate',
+    costWood: 15,
+    costStone: 0,
+    width: 1,
+    height: 1,
+    maxProgress: 50,
+    icon: '🚪',
+    description: 'Wood Gate blocks enemies, opens for friendlies.'
   }
 };
 
@@ -97,6 +119,22 @@ export class Building {
     this.maxProgress = meta.maxProgress;
     this.isBuilt = false;
 
+    // Set base health
+    const healthMap = {
+      hut: 250,
+      storage: 300,
+      kitchen: 200,
+      armoury: 250,
+      gym: 250,
+      shaman: 250,
+      tower: 300,
+      farm: 200,
+      wall: 150,
+      gate: 200
+    };
+    this.maxHealth = healthMap[type] || 200;
+    this.health = this.maxHealth;
+
     // Watchtower properties
     if (type === 'tower') {
       this.range = 5; // grid cells
@@ -109,6 +147,12 @@ export class Building {
     if (type === 'armoury') {
       this.craftTimer = 0;
       this.craftCooldown = 15; // seconds to craft a weapon
+    }
+
+    // Farm properties
+    if (type === 'farm') {
+      this.foodAmount = 200;
+      this.maxFoodAmount = 200;
     }
   }
 
@@ -145,6 +189,87 @@ export class Building {
     // Armoury crafts weapons
     if (this.type === 'armoury') {
       this.updateArmoury(deltaTime);
+    }
+
+    // Farm crop regrowth
+    if (this.type === 'farm') {
+      this.foodAmount = Math.min(this.maxFoodAmount, this.foodAmount + deltaTime * 2.0);
+    }
+
+    // Gate collision checking
+    if (this.type === 'gate') {
+      this.updateGate(deltaTime, gameMap);
+    }
+  }
+
+  updateGate(deltaTime, gameMap) {
+    let friendlyNear = false;
+    gameState.villagers.forEach(v => {
+      const d = Math.sqrt((v.visualX - this.x) ** 2 + (v.visualY - this.y) ** 2);
+      if (d < 1.6) {
+        friendlyNear = true;
+      }
+    });
+
+    if (friendlyNear) {
+      if (gameMap.collisionGrid[this.y][this.x]) {
+        // Open gate
+        gameMap.collisionGrid[this.y][this.x] = false;
+        this.icon = '🔓';
+      }
+    } else {
+      // Close gate if no one is standing on it
+      let someoneOnGate = false;
+      gameState.villagers.concat(gameState.enemies).forEach(entity => {
+        if (Math.round(entity.visualX) === this.x && Math.round(entity.visualY) === this.y) {
+          someoneOnGate = true;
+        }
+      });
+
+      if (!someoneOnGate && !gameMap.collisionGrid[this.y][this.x]) {
+        // Close gate
+        gameMap.collisionGrid[this.y][this.x] = true;
+        this.icon = '🚪';
+      }
+    }
+  }
+
+  takeDamage(amount) {
+    this.health = Math.max(0, this.health - amount);
+    
+    // Spawn hit particle
+    gameState.particles.push({
+      symbol: '💥',
+      x: this.x + this.width / 2,
+      y: this.y + this.height / 2 - 0.5,
+      life: 0.8,
+      vx: (Math.random() - 0.5) * 0.4,
+      vy: -0.8
+    });
+
+    if (this.health <= 0) {
+      this.destroy();
+    }
+  }
+
+  destroy() {
+    gameState.addLog(`Your ${this.name} was destroyed by attackers!`, 'danger');
+    gameAudio.playDeath(); // Collapse sound
+
+    // Remove collision grid blocks
+    window.gameEngine.map.placeBuildingCollision(this.x, this.y, this.width, this.height, false);
+
+    // Revert population caps / storage if needed
+    if (this.type === 'hut') {
+      gameState.maxPopulation = Math.max(6, gameState.maxPopulation - 3);
+    } else if (this.type === 'storage') {
+      gameState.storageLimit = Math.max(200, gameState.storageLimit - 250);
+    }
+
+    // Remove from active buildings list
+    const idx = gameState.buildings.indexOf(this);
+    if (idx !== -1) {
+      gameState.buildings.splice(idx, 1);
     }
   }
 

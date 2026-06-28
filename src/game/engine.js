@@ -611,6 +611,12 @@ export class GameEngine {
         } else if (type === 'sand') {
           // Warm sandy riverbank
           this.ctx.fillStyle = '#d4b060';
+        } else if (type === 'dirt') {
+          this.ctx.fillStyle = '#8a6c4c';
+        } else if (type === 'bridge') {
+          const shimmer = Math.sin(now / 700 + x * 0.8 + y * 0.6) * 6;
+          const g = Math.floor(130 + shimmer);
+          this.ctx.fillStyle = `rgb(28,${g},195)`;
         }
 
         this.ctx.fillRect(x * size, y * size, size, size);
@@ -624,6 +630,23 @@ export class GameEngine {
           this.ctx.moveTo(x * size + 6, y * size + size * 0.4);
           this.ctx.lineTo(x * size + 22, y * size + size * 0.4);
           this.ctx.stroke();
+        } else if (type === 'bridge') {
+          // Draw wood planks overlay on water
+          this.ctx.fillStyle = '#855938';
+          this.ctx.fillRect(x * size, y * size + 4, size, size - 8);
+          // Planks lines
+          this.ctx.strokeStyle = '#5a3d24';
+          this.ctx.lineWidth = 1.5;
+          for (let offset = 4; offset < size; offset += 8) {
+            this.ctx.beginPath();
+            this.ctx.moveTo(x * size + offset, y * size + 4);
+            this.ctx.lineTo(x * size + offset, y * size + size - 4);
+            this.ctx.stroke();
+          }
+          // Ropes on borders
+          this.ctx.fillStyle = '#d4b07c';
+          this.ctx.fillRect(x * size, y * size + 4, size, 3);
+          this.ctx.fillRect(x * size, y * size + size - 7, size, 3);
         } else if (type === 'grass') {
           // Very subtle grass detail
           this.ctx.strokeStyle = 'rgba(0,60,0,0.07)';
@@ -1224,6 +1247,70 @@ export class GameEngine {
           ctx.textAlign = 'center';
           ctx.textBaseline = 'middle';
           ctx.fillText('🏹', 0, -46);
+        } else if (b.type === 'farm') {
+          // Ground dirt plot
+          ctx.fillStyle = '#83624c';
+          ctx.fillRect(-w/2 + 4, -h/2 + 4, w - 8, h - 8);
+          // Crop rows (horizontal green lines)
+          ctx.strokeStyle = '#558022';
+          ctx.lineWidth = 3.5;
+          for (let i = -h/2 + 10; i < h/2 - 4; i += 12) {
+            ctx.beginPath();
+            ctx.moveTo(-w/2 + 8, i);
+            ctx.lineTo(w/2 - 8, i);
+            ctx.stroke();
+          }
+          // Fence
+          ctx.strokeStyle = '#5c3a20';
+          ctx.lineWidth = 2.2;
+          ctx.strokeRect(-w/2 + 4, -h/2 + 4, w - 8, h - 8);
+          
+          // Crop symbol
+          ctx.font = '16px Arial';
+          ctx.textAlign = 'center';
+          ctx.textBaseline = 'middle';
+          ctx.fillText('🌾', 0, 0);
+
+          // Food bar indicator
+          ctx.fillStyle = 'rgba(0,0,0,0.5)';
+          ctx.fillRect(-w/3, h/2 - 12, (w/3)*2, 4);
+          ctx.fillStyle = '#4aba22';
+          ctx.fillRect(-w/3, h/2 - 12, ((w/3)*2) * (b.foodAmount / 200), 4);
+        } else if (b.type === 'wall') {
+          // Log wall post
+          ctx.fillStyle = '#7a4f30';
+          ctx.fillRect(-w/2, -h/2, w, h);
+          ctx.strokeStyle = '#4a2f18';
+          ctx.lineWidth = 2;
+          ctx.strokeRect(-w/2, -h/2, w, h);
+          ctx.beginPath();
+          ctx.moveTo(0, -h/2);
+          ctx.lineTo(0, h/2);
+          ctx.stroke();
+        } else if (b.type === 'gate') {
+          if (b.icon === '🔓') {
+            // Open Gate - side posts
+            ctx.fillStyle = '#7a4f30';
+            ctx.fillRect(-w/2, -h/2, 6, h);
+            ctx.fillRect(w/2 - 6, -h/2, 6, h);
+            ctx.strokeStyle = '#4a2f18';
+            ctx.lineWidth = 1.5;
+            ctx.strokeRect(-w/2, -h/2, 6, h);
+            ctx.strokeRect(w/2 - 6, -h/2, 6, h);
+          } else {
+            // Closed Gate - solid blockade
+            ctx.fillStyle = '#5c3a20';
+            ctx.fillRect(-w/2, -h/2, w, h);
+            ctx.strokeStyle = '#a02010';
+            ctx.lineWidth = 2.5;
+            ctx.beginPath();
+            ctx.moveTo(-w/2 + 3, -h/2 + 3); ctx.lineTo(w/2 - 3, h/2 - 3);
+            ctx.moveTo(w/2 - 3, -h/2 + 3); ctx.lineTo(-w/2 + 3, h/2 - 3);
+            ctx.stroke();
+            ctx.strokeStyle = '#4a2f18';
+            ctx.lineWidth = 1.5;
+            ctx.strokeRect(-w/2, -h/2, w, h);
+          }
         }
       }
 

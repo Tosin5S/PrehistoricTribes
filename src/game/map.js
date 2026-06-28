@@ -70,6 +70,40 @@ export class GameMap {
         }
       }
     }
+
+    // Generate bridges over water at x = 8 and x = 24
+    [8, 24].forEach(bx => {
+      for (let y = 0; y < this.height; y++) {
+        if (this.grid[y][bx] === 'water') {
+          this.grid[y][bx] = 'bridge';
+          this.collisionGrid[y][bx] = false; // walkable
+        }
+      }
+    });
+
+    // Generate crossroads dirt paths in the center
+    const cx = Math.floor(this.width / 2);
+    const cy = Math.floor(this.height / 2);
+    for (let i = -6; i <= 6; i++) {
+      for (let dy = -1; dy <= 0; dy++) {
+        const hx = cx + i;
+        const hy = cy + dy;
+        if (hx >= 0 && hx < this.width && hy >= 0 && hy < this.height) {
+          if (this.grid[hy][hx] === 'grass' || this.grid[hy][hx] === 'sand') {
+            this.grid[hy][hx] = 'dirt';
+          }
+        }
+      }
+      for (let dx = -1; dx <= 0; dx++) {
+        const hx = cx + dx;
+        const hy = cy + i;
+        if (hx >= 0 && hx < this.width && hy >= 0 && hy < this.height) {
+          if (this.grid[hy][hx] === 'grass' || this.grid[hy][hx] === 'sand') {
+            this.grid[hy][hx] = 'dirt';
+          }
+        }
+      }
+    }
   }
 
   addSandBuffer(x, y) {

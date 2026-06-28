@@ -129,13 +129,13 @@ export class Villager {
     // Check emergency needs: Eating and Sleeping overrides normal jobs
     if (this.state !== 'eating' && this.hunger > 80) {
       this.seekFood(gameMap);
-      this.moveAlongPath(deltaTime);
+      this.moveAlongPath(deltaTime, gameMap);
       return;
     }
     
     if (this.state !== 'sleeping' && this.energy < 15) {
       this.seekSleep(gameMap);
-      this.moveAlongPath(deltaTime);
+      this.moveAlongPath(deltaTime, gameMap);
       return;
     }
 
@@ -145,7 +145,7 @@ export class Villager {
         this.executeIdleBehavior(deltaTime, gameMap);
         break;
       case 'moving':
-        this.moveAlongPath(deltaTime);
+        this.moveAlongPath(deltaTime, gameMap);
         break;
       case 'gathering':
         this.executeGathering(deltaTime, gameMap);
@@ -180,7 +180,7 @@ export class Villager {
     }
   }
 
-  moveAlongPath(deltaTime) {
+  moveAlongPath(deltaTime, gameMap) {
     if (this.path.length === 0) {
       this.state = 'idle';
       return;
@@ -198,7 +198,9 @@ export class Villager {
       this.facing = dy > 0 ? 'down' : 'up';
     }
 
-    const step = this.speed * deltaTime;
+    const onDirt = gameMap && gameMap.grid[this.gridY]?.[this.gridX] === 'dirt';
+    const currentSpeed = this.speed * (onDirt ? 1.4 : 1.0);
+    const step = currentSpeed * deltaTime;
 
     if (dist <= step) {
       // Reached next tile
@@ -389,8 +391,14 @@ export class Villager {
         this.wander(gameMap);
       }
     } else if (this.job === 'gatherer') {
-      // Find bush or fish
-      const source = this.findClosestResource(Math.random() < 0.6 ? 'bush' : 'fish', gameMap) || this.findClosestResource('bush', gameMap) || this.findClosestResource('fish', gameMap);
+      let source = null;
+      let closestFarm = gameState.buildings.find(b => b.type === 'farm' && b.isBuilt && b.foodAmount > 10);
+      if (closestFarm) {
+        source = closestFarm;
+      } else {
+        source = this.findClosestResource(Math.random() < 0.6 ? 'bush' : 'fish', gameMap) || this.findClosestResource('bush', gameMap) || this.findClosestResource('fish', gameMap);
+      }
+      
       if (source) {
         this.target = source;
         this.path = gameMap.findPath(this.gridX, this.gridY, source.x, source.y);
@@ -488,8 +496,15 @@ export class Villager {
       } else if (this.job === 'gatherer') {
         gameAudio.playCook(); // rustle
         this.inventory.type = 'rawFood';
-        this.inventory.amount = Math.min(this.inventory.max, this.inventory.amount + 4);
-        this.spawnParticle('🍒');
+        if (this.target && this.target.type === 'farm') {
+          const taken = Math.min(4, Math.ceil(this.target.foodAmount));
+          this.target.foodAmount = Math.max(0, this.target.foodAmount - taken);
+          this.inventory.amount = Math.min(this.inventory.max, this.inventory.amount + taken);
+          this.spawnParticle('🌾');
+        } else {
+          this.inventory.amount = Math.min(this.inventory.max, this.inventory.amount + 4);
+          this.spawnParticle('🍒');
+        }
       } else if (this.job === 'cook') {
         // Cook gathers raw food from warehouse
         const taken = Math.min(this.inventory.max, gameState.rawFood);
@@ -517,9 +532,16 @@ export class Villager {
         
         // Verify resource still exists
         if (this.target && this.target.id !== undefined) {
-          const res = gameMap.resources.find(r => r.id === this.target.id);
-          if (!res) {
-            this.state = 'idle'; // resource is dry
+          if (this.target.type === 'farm') {
+            const farm = gameState.buildings.find(b => b.id === this.target.id);
+            if (!farm || farm.foodAmount <= 0) {
+              this.state = 'idle';
+            }
+          } else {
+            const res = gameMap.resources.find(r => r.id === this.target.id);
+            if (!res) {
+              this.state = 'idle'; // resource is dry
+            }
           }
         }
       }
@@ -932,7 +954,32 @@ export class Enemy {
           );
         }
         
-        this.moveAlongPath(deltaTime);
+        if (this.path.length > 0) {
+          this.moveAlongPath(deltaTime);
+        } else {
+          // Blocked, attack adjacent building
+          let adjacentBuilding = null;
+          let minDistBuilding = 1.6;
+          gameState.buildings.forEach(b => {
+            for (let by = b.y; by < b.y + b.height; by++) {
+              for (let bx = b.x; bx < b.x + b.width; bx++) {
+                const d = Math.sqrt((bx - this.visualX) ** 2 + (by - this.visualY) ** 2);
+                if (d < minDistBuilding) {
+                  minDistBuilding = d;
+                  adjacentBuilding = b;
+                }
+              }
+            }
+          });
+
+          if (adjacentBuilding) {
+            if (this.attackTimer <= 0) {
+              this.attackTimer = 1.5;
+              adjacentBuilding.takeDamage(this.damage);
+              gameAudio.playCombatHit();
+            }
+          }
+        }
       }
     } else {
       // Walk towards center to loot/burn Huts
@@ -944,7 +991,33 @@ export class Enemy {
           16
         );
       }
-      this.moveAlongPath(deltaTime);
+      
+      if (this.path.length > 0) {
+        this.moveAlongPath(deltaTime);
+      } else {
+        // Blocked, attack adjacent building
+        let adjacentBuilding = null;
+        let minDistBuilding = 1.6;
+        gameState.buildings.forEach(b => {
+          for (let by = b.y; by < b.y + b.height; by++) {
+            for (let bx = b.x; bx < b.x + b.width; bx++) {
+              const d = Math.sqrt((bx - this.visualX) ** 2 + (by - this.visualY) ** 2);
+              if (d < minDistBuilding) {
+                minDistBuilding = d;
+                adjacentBuilding = b;
+              }
+            }
+          }
+        });
+
+        if (adjacentBuilding) {
+          if (this.attackTimer <= 0) {
+            this.attackTimer = 1.5;
+            adjacentBuilding.takeDamage(this.damage);
+            gameAudio.playCombatHit();
+          }
+        }
+      }
     }
   }
 
