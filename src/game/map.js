@@ -56,10 +56,10 @@ export class GameMap {
       }
     }
 
-    // Spawn a small lake at the bottom left
-    const lakeCX = 6;
-    const lakeCY = 24;
-    const lakeRadius = 4;
+    // Spawn a lake scaling dynamically with map dimensions
+    const lakeCX = Math.floor(this.width * 0.1875);
+    const lakeCY = Math.floor(this.height * 0.75);
+    const lakeRadius = Math.floor(this.width * 0.125);
     for (let y = 0; y < this.height; y++) {
       for (let x = 0; x < this.width; x++) {
         const dist = Math.sqrt((x - lakeCX) ** 2 + (y - lakeCY) ** 2);
@@ -72,8 +72,10 @@ export class GameMap {
       }
     }
 
-    // Generate bridges over water at x = 8 and x = 24
-    [8, 24].forEach(bx => {
+    // Generate bridges over water at 25% and 75% junctions
+    const b1 = Math.floor(this.width * 0.25);
+    const b2 = Math.floor(this.width * 0.75);
+    [b1, b2].forEach(bx => {
       for (let y = 0; y < this.height; y++) {
         if (this.grid[y][bx] === 'water') {
           this.grid[y][bx] = 'bridge';
@@ -85,7 +87,8 @@ export class GameMap {
     // Generate crossroads dirt paths in the center
     const cx = Math.floor(this.width / 2);
     const cy = Math.floor(this.height / 2);
-    for (let i = -6; i <= 6; i++) {
+    const roadHalfLength = Math.floor(this.width * 0.2);
+    for (let i = -roadHalfLength; i <= roadHalfLength; i++) {
       for (let dy = -1; dy <= 0; dy++) {
         const hx = cx + i;
         const hy = cy + dy;
@@ -116,11 +119,11 @@ export class GameMap {
       this.heightGrid.push(hRow);
     }
 
-    // Circular hills/plateaus overlay
+    // Dynamic circular hills/plateaus overlay
     const hills = [
-      { cx: 28, cy: 5, r: 6, maxH: 2 },
-      { cx: 4, cy: 28, r: 5, maxH: 2 },
-      { cx: 27, cy: 26, r: 6, maxH: 2 }
+      { cx: Math.floor(this.width * 0.875), cy: Math.floor(this.height * 0.156), r: Math.floor(this.width * 0.1875), maxH: 2 },
+      { cx: Math.floor(this.width * 0.125), cy: Math.floor(this.height * 0.875), r: Math.floor(this.width * 0.156), maxH: 2 },
+      { cx: Math.floor(this.width * 0.843), cy: Math.floor(this.height * 0.812), r: Math.floor(this.width * 0.1875), maxH: 2 }
     ];
 
     hills.forEach(hill => {
@@ -156,19 +159,32 @@ export class GameMap {
   spawnInitialResources() {
     this.resources = [];
     
+    // Scale count of wood, rocks, bushes based on map width
+    const multiplier = this.width / 32;
+
     // Spawn forest clusters (wood)
-    this.spawnResourceCluster(5, 5, 8, 'tree', 150);
-    this.spawnResourceCluster(24, 6, 9, 'tree', 150);
-    this.spawnResourceCluster(25, 25, 7, 'tree', 150);
+    this.spawnResourceCluster(Math.floor(this.width * 0.15), Math.floor(this.height * 0.15), Math.floor(8 * multiplier), 'tree', 150);
+    this.spawnResourceCluster(Math.floor(this.width * 0.75), Math.floor(this.height * 0.18), Math.floor(9 * multiplier), 'tree', 150);
+    this.spawnResourceCluster(Math.floor(this.width * 0.78), Math.floor(this.height * 0.78), Math.floor(7 * multiplier), 'tree', 150);
+    if (this.width > 32) {
+      // Extra clusters for larger maps
+      this.spawnResourceCluster(Math.floor(this.width * 0.25), Math.floor(this.height * 0.75), Math.floor(8 * multiplier), 'tree', 150);
+      this.spawnResourceCluster(Math.floor(this.width * 0.55), Math.floor(this.height * 0.15), Math.floor(6 * multiplier), 'tree', 150);
+      this.spawnResourceCluster(Math.floor(this.width * 0.55), Math.floor(this.height * 0.82), Math.floor(6 * multiplier), 'tree', 150);
+    }
 
     // Spawn stone clusters (mountains/rocks)
-    this.spawnResourceCluster(18, 4, 4, 'rock', 200);
-    this.spawnResourceCluster(5, 15, 4, 'rock', 200);
-    this.spawnResourceCluster(26, 18, 5, 'rock', 200);
+    this.spawnResourceCluster(Math.floor(this.width * 0.56), Math.floor(this.height * 0.12), Math.floor(4 * multiplier), 'rock', 200);
+    this.spawnResourceCluster(Math.floor(this.width * 0.15), Math.floor(this.height * 0.46), Math.floor(4 * multiplier), 'rock', 200);
+    this.spawnResourceCluster(Math.floor(this.width * 0.81), Math.floor(this.height * 0.56), Math.floor(5 * multiplier), 'rock', 200);
+    if (this.width > 32) {
+      this.spawnResourceCluster(Math.floor(this.width * 0.35), Math.floor(this.height * 0.35), Math.floor(4 * multiplier), 'rock', 200);
+      this.spawnResourceCluster(Math.floor(this.width * 0.65), Math.floor(this.height * 0.65), Math.floor(4 * multiplier), 'rock', 200);
+    }
 
-    // Spawn berry bushes (food) near the center
-    this.spawnResourceCluster(12, 16, 5, 'bush', 80);
-    this.spawnResourceCluster(19, 14, 4, 'bush', 80);
+    // Spawn berry bushes (food)
+    this.spawnResourceCluster(Math.floor(this.width * 0.37), Math.floor(this.height * 0.5), Math.floor(5 * multiplier), 'bush', 80);
+    this.spawnResourceCluster(Math.floor(this.width * 0.59), Math.floor(this.height * 0.43), Math.floor(4 * multiplier), 'bush', 80);
 
     // Spawn fishing holes in the river / lake
     for (let y = 0; y < this.height; y++) {

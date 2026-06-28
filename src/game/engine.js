@@ -9,7 +9,7 @@ export class GameEngine {
     this.canvas = document.getElementById(canvasId);
     this.ctx = this.canvas.getContext('2d');
     
-    this.map = new GameMap(32, 32);
+    this.map = new GameMap(64, 64);
     
     // Load original Tzar terrain spritesheets
     this.terrainImages = {
@@ -29,8 +29,8 @@ export class GameEngine {
     
     // Viewport camera controls
     this.camera = {
-      x: 16 * 64 - window.innerWidth / 2, // Center camera on middle of grid
-      y: 16 * 64 - window.innerHeight / 2,
+      x: (this.map.width * 64) / 2 - window.innerWidth / 2, // Center camera on middle of grid
+      y: (this.map.height * 64) / 2 - window.innerHeight / 2,
       zoom: 1.0,
       minZoom: 0.5,
       maxZoom: 2.0
@@ -55,7 +55,7 @@ export class GameEngine {
 
   spawnInitialTribe() {
     gameState.villagers = [];
-    const center = 16;
+    const center = Math.floor(this.map.width / 2);
     const genders = ['Male', 'Female', 'Female', 'Male'];
     let count = 0;
     
@@ -120,14 +120,16 @@ export class GameEngine {
         this.camera.y -= dy / this.camera.zoom;
         this.dragStart.x = e.clientX;
         this.dragStart.y = e.clientY;
-        this.canvas.style.cursor = 'grabbing';
+        this.canvas.style.cursor = `url('/Tzar/IMAGES/CURSORS/H_HAND.BMP') 8 8, auto`;
+      } else {
+        this.updateContextualCursor(e);
       }
     });
 
     window.addEventListener('mouseup', (e) => {
       if (this.isDragging) {
         this.isDragging = false;
-        this.canvas.style.cursor = 'grab';
+        this.canvas.style.cursor = `url('/Tzar/IMAGES/CURSORS/H_HAND.BMP') 8 8, auto`;
       }
     });
 
@@ -184,6 +186,61 @@ export class GameEngine {
   resizeCanvas() {
     this.canvas.width = this.canvas.parentElement.clientWidth;
     this.canvas.height = this.canvas.parentElement.clientHeight;
+  }
+
+  updateContextualCursor(e) {
+    const rect = this.canvas.getBoundingClientRect();
+    const mouseX = e.clientX - rect.left;
+    const mouseY = e.clientY - rect.top;
+    const worldX = mouseX / this.camera.zoom + this.camera.x;
+    const worldY = mouseY / this.camera.zoom + this.camera.y;
+
+    const gridX = Math.floor(worldX / this.map.tileSize);
+    const gridY = Math.floor(worldY / this.map.tileSize);
+
+    let cursorUrl = '/Tzar/IMAGES/CURSORS/H_HAND.BMP';
+    let hotspotX = 8;
+    let hotspotY = 8;
+
+    const isVillagerSelected = this.selectedEntity && gameState.villagers.includes(this.selectedEntity);
+
+    if (isVillagerSelected && !this.buildPlacementMode) {
+      // 1. Hovering Enemy unit?
+      const hoverEnemy = gameState.enemies.find(en => {
+        const ex = en.visualX * this.map.tileSize + this.map.tileSize / 2;
+        const ey = en.visualY * this.map.tileSize + this.map.tileSize / 2;
+        return Math.sqrt((worldX - ex) ** 2 + (worldY - ey) ** 2) < 28;
+      });
+
+      if (hoverEnemy) {
+        cursorUrl = '/Tzar/IMAGES/CURSORS/H_ATTACK.BMP';
+        hotspotX = 2;
+        hotspotY = 2;
+      } else {
+        // 2. Hovering Resource?
+        const hoverRes = this.map.resources.find(r => r.x === gridX && r.y === gridY);
+        if (hoverRes && (hoverRes.type === 'tree' || hoverRes.type === 'rock' || hoverRes.type === 'bush' || hoverRes.type === 'fish')) {
+          cursorUrl = '/Tzar/IMAGES/CURSORS/H_HARVEST.BMP';
+          hotspotX = 2;
+          hotspotY = 2;
+        } else {
+          // 3. Hovering damaged or friendly building?
+          const hoverBuilding = gameState.buildings.find(b => gridX >= b.x && gridX < b.x + b.width && gridY >= b.y && gridY < b.y + b.height);
+          if (hoverBuilding && (hoverBuilding.health < hoverBuilding.maxHealth || !hoverBuilding.isBuilt)) {
+            cursorUrl = '/Tzar/IMAGES/CURSORS/H_REPAIR.BMP';
+            hotspotX = 2;
+            hotspotY = 2;
+          } else {
+            // 4. Hovering walkable terrain
+            cursorUrl = '/Tzar/IMAGES/CURSORS/H_MOVE.BMP';
+            hotspotX = 2;
+            hotspotY = 2;
+          }
+        }
+      }
+    }
+
+    this.canvas.style.cursor = `url('${cursorUrl}') ${hotspotX} ${hotspotY}, auto`;
   }
 
   // Handle building placement click
@@ -506,10 +563,12 @@ export class GameEngine {
 
       for (let i = 0; i < raidSize; i++) {
         let rx, ry;
-        if (edge === 'top') { rx = Math.floor(Math.random() * 32); ry = 0; }
-        else if (edge === 'bottom') { rx = Math.floor(Math.random() * 32); ry = 31; }
-        else if (edge === 'left') { rx = 0; ry = Math.floor(Math.random() * 32); }
-        else { rx = 31; ry = Math.floor(Math.random() * 32); }
+        const maxW = this.map.width;
+        const maxH = this.map.height;
+        if (edge === 'top') { rx = Math.floor(Math.random() * maxW); ry = 0; }
+        else if (edge === 'bottom') { rx = Math.floor(Math.random() * maxW); ry = maxH - 1; }
+        else if (edge === 'left') { rx = 0; ry = Math.floor(Math.random() * maxH); }
+        else { rx = maxW - 1; ry = Math.floor(Math.random() * maxH); }
 
         const enemy = new Enemy(Date.now() + i, rx, ry);
         gameState.enemies.push(enemy);
@@ -766,8 +825,8 @@ export class GameEngine {
     }
 
     // Lake sand pebbles
-    const lakeX = 6.2 * size;
-    const lakeY = 24.2 * size;
+    const lakeX = (this.map.width * 0.1875 + 0.2) * size;
+    const lakeY = (this.map.height * 0.75 + 0.2) * size;
     for (let angle = 0; angle < Math.PI * 2; angle += 0.35) {
       const radius = 4.3 * size + (Math.sin(angle * 4) * 8);
       const px = lakeX + Math.cos(angle) * radius;
@@ -822,11 +881,12 @@ export class GameEngine {
     this.ctx.lineWidth = size * 2.3;
     const cx = Math.floor(this.map.width / 2) * size + size / 2;
     const cy = Math.floor(this.map.height / 2) * size + size / 2;
+    const roadLength = Math.floor(this.map.width * 0.2) * size;
     this.ctx.beginPath();
-    this.ctx.moveTo(cx - 7 * size, cy); this.ctx.lineTo(cx + 7 * size, cy);
+    this.ctx.moveTo(cx - roadLength, cy); this.ctx.lineTo(cx + roadLength, cy);
     this.ctx.stroke();
     this.ctx.beginPath();
-    this.ctx.moveTo(cx, cy - 7 * size); this.ctx.lineTo(cx, cy + 7 * size);
+    this.ctx.moveTo(cx, cy - roadLength); this.ctx.lineTo(cx, cy + roadLength);
     this.ctx.stroke();
 
     // PASS 6: 3D Height elevations / plateaus
@@ -869,7 +929,9 @@ export class GameEngine {
     }
 
     // PASS 7: Bridges wood plank structures
-    [8, 24].forEach(bx => {
+    const b1 = Math.floor(this.map.width * 0.25);
+    const b2 = Math.floor(this.map.width * 0.75);
+    [b1, b2].forEach(bx => {
       const bX = bx * size;
       const bYStart = (bx - 2 + Math.sin(bx * 0.4) * 2) * size + size / 2 - size * 1.5;
       const bYEnd = (bx - 2 + Math.sin(bx * 0.4) * 2) * size + size / 2 + size * 1.5;

@@ -159,6 +159,13 @@ body {
   font-size: 1.5rem;
   filter: drop-shadow(0 2px 4px rgba(0,0,0,0.5));
 }
+.status-item .icon img {
+  width: 24px;
+  height: 24px;
+  object-fit: contain;
+  image-rendering: pixelated;
+  vertical-align: middle;
+}
 
 .stat-values {
   display: flex;
@@ -230,10 +237,10 @@ body {
   display: block;
   width: 100%;
   height: 100%;
-  cursor: grab;
+  cursor: url('/Tzar/IMAGES/CURSORS/H_HAND.BMP') 8 8, auto;
 }
 #game-canvas:active {
-  cursor: grabbing;
+  cursor: url('/Tzar/IMAGES/CURSORS/H_HAND.BMP') 8 8, auto;
 }
 
 #weather-overlay {
